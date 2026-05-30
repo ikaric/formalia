@@ -77,14 +77,18 @@ output (`aesop?` → reproducible `apply` chain; `exact?` → the named
 lemma application) before committing. Non-deterministic tactics in
 committed scripts are a maintenance landmine.
 
-**Out-of-band**:
-- `WebFetch https://loogle.lean-fro.org/?q=<type shape>` — Mathlib
-  query by type signature (e.g., `?n ?p → Nat.Prime ?p → ?p ∣ ?n`).
-- `WebFetch https://leansearch.net/?q=<English statement>` — natural
-  language → Mathlib lemma.
-- `WebFetch https://reservoir.lean-lang.org/?q=<keyword>` — packages
-  outside Mathlib (use only if Mathlib's coverage is genuinely
-  missing).
+**Out-of-band** (`WebFetch` is GET-only; leansearch needs a `curl` POST):
+- **loogle** — `WebFetch https://loogle.lean-lang.org/json?q=<type shape>`
+  — Mathlib query by type signature (e.g.,
+  `?q=?n ?p → Nat.Prime ?p → ?p ∣ ?n`); JSON `hits[]` give
+  name/module/type. (The old `loogle.lean-fro.org` host is dead.)
+- **leansearch** — `curl -s -X POST https://leansearch.net/search -H
+  'Content-Type: application/json' -d '{"query":["<English statement>"],"num_results":5}'`
+  — natural language → Mathlib lemma. (`query` is a JSON array; GET 405s.)
+- **reservoir** — `WebFetch https://reservoir.lean-lang.org/api/v1/packages/<owner>/<package>`
+  (JSON) or `…/packages` to browse — packages outside Mathlib (use
+  only if Mathlib's coverage is genuinely missing; the site `?q=`
+  search box is client-side JS and returns junk to a fetch).
 
 ### Acceptance gate — `#print axioms`
 
@@ -138,12 +142,15 @@ Conventions:
 Before writing a proof from scratch, check whether someone has
 already formalized it:
 
-1. `WebFetch https://loogle.lean-fro.org/?q=<type shape>` — Mathlib
-   has the result? Import the module, write a one-line wrapper.
-2. `WebFetch https://leansearch.net/?q=<English>` — same check,
-   English query.
-3. `WebFetch https://reservoir.lean-lang.org/?q=<keyword>` — a
-   non-Mathlib Lean package has it?
+1. **loogle** — `WebFetch https://loogle.lean-lang.org/json?q=<type
+   shape>`: Mathlib has the result? Import the module, write a
+   one-line wrapper. (`loogle.lean-fro.org` is dead — use `lean-lang.org`.)
+2. **leansearch** (English) — `curl -s -X POST
+   https://leansearch.net/search -H 'Content-Type: application/json'
+   -d '{"query":["<English>"],"num_results":5}'`: same check, English query.
+3. **reservoir** — `WebFetch
+   https://reservoir.lean-lang.org/api/v1/packages/<owner>/<package>`:
+   a non-Mathlib Lean package has it?
 4. Recent arXiv preprints with Lean source attached.
 
 If a published Lean formalization exists, **import, don't reprove**.

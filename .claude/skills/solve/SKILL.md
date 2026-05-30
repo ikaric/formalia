@@ -219,10 +219,13 @@ definition is a deliberate user-driven step.
 Before formalizing **any** new subgoal, confirm the result is not
 already in Mathlib or recent literature. ~30-second budget:
 
-1. `WebFetch https://loogle.lean-fro.org/?q=<lemma type shape>` —
+1. `WebFetch https://loogle.lean-lang.org/json?q=<lemma type shape>` —
    does Mathlib have it? (Loogle accepts type-shaped queries; e.g.,
-   `?n ?p → Nat.Prime ?p → ?p ∣ ?n`.)
-2. `WebFetch https://leansearch.net/?q=<English statement>` —
+   `?n ?p → Nat.Prime ?p → ?p ∣ ?n`; JSON `hits[]` give name/module.
+   The old `loogle.lean-fro.org` host is dead — use `lean-lang.org`.)
+2. **leansearch** — POST, not WebFetch (GET 405s): `curl -s -X POST
+   https://leansearch.net/search -H 'Content-Type: application/json'
+   -d '{"query":["<English statement>"],"num_results":5}'` — a
    natural-language check against Mathlib.
 3. If nothing in Mathlib: dispatch `librarian` for a quick arXiv
    check on the last 5 years.

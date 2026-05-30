@@ -109,7 +109,7 @@ flowchart LR
     style J fill:#D32F2F,color:#fff
 ```
 
-The **novelty gate** (step 0) is non-optional. Mathlib formalizes a vast amount of mathematics; before formalizing *anything*, the harness queries `loogle.lean-fro.org` (type-shaped queries) and `leansearch.net` (English queries). If Mathlib has the result, the subgoal collapses to a one-line import wrapper — one ROADMAP checkbox ticked in one commit, no reformalization. Skipping the gate is the documented anti-pattern: sessions get burned reformalizing folklore that already lives upstream.
+The **novelty gate** (step 0) is non-optional. Mathlib formalizes a vast amount of mathematics; before formalizing *anything*, the harness queries `loogle.lean-lang.org` (type-shaped queries) and `leansearch.net` (English queries). If Mathlib has the result, the subgoal collapses to a one-line import wrapper — one ROADMAP checkbox ticked in one commit, no reformalization. Skipping the gate is the documented anti-pattern: sessions get burned reformalizing folklore that already lives upstream.
 
 ### Honest tagging
 

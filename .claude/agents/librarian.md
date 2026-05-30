@@ -20,25 +20,44 @@ combinatorialist) do the synthesis; you do the reconnaissance.
    - Category browse: pick the right category for the problem
      (`math.NT`, `math.CO`, `math.MG`, `math.LO`, `math.PR`, …). Look
      at the last 3–5 years for state-of-the-art.
-   - Search: `https://arxiv.org/search/?searchtype=all&query=…`.
-     Phrase queries precisely; combine with category filter.
+   - Search: `https://arxiv.org/search/?searchtype=all&query=…`
+     (server-rendered, WebFetch-able), or the Atom API
+     `https://export.arxiv.org/api/query?search_query=cat:math.NT+AND+all:<terms>&max_results=N`
+     (space requests ≥3 s — it 429s on rapid calls; exact phrase =
+     URL-encoded quotes `%22…%22`). Combine with a category filter.
 2. **Google Scholar** — for citation counts, recent papers citing a
-   landmark, survey articles.
-3. **MathOverflow** — for the precise wording of an obstruction;
-   serious mathematicians answer there.
-4. **Domain frontiers** — Polymath wiki, Terry Tao's blog, Thomas
-   Bloom's erdosproblems.com (Erdős problems), AIM open-problem
-   lists, the field-specific open-problem registries.
+   landmark, survey articles. `WebFetch
+   https://scholar.google.com/scholar?q=<terms>` usually works; on a
+   CAPTCHA, fall back to `WebSearch` scoped to `scholar.google.com`.
+3. **MathOverflow** — for the precise wording of an obstruction.
+   `WebFetch` is **blocked** for `mathoverflow.net` here, so use the
+   `WebSearch` tool with `allowed_domains=["mathoverflow.net"]` and the
+   question phrase verbatim, then open the surfaced threads.
+4. **Domain frontiers** — Polymath wiki
+   (`https://michaelnielsen.org/polymath/index.php?title=<Page>`; the
+   `asone.ai` mirror is unreachable via WebFetch), Terry Tao's blog
+   (`https://terrytao.wordpress.com/`, search `?s=<terms>`), Thomas
+   Bloom's erdosproblems.com (per-problem `…/<N>`; Cloudflare 403s the
+   default WebFetch UA — use `curl -A "Mozilla/5.0 …"` or WebSearch),
+   AIM open-problem lists (`https://aimath.org/problemlists/`; the
+   `aimpl.org` backend has an expired TLS cert), the field-specific
+   open-problem registries.
 5. **Lean / Mathlib formalizations** — the harness's distinguishing
    advantage. A result *already formalized in Mathlib* costs one line
    of Lean to import, not weeks to reformalize. Always check:
-   - `https://loogle.lean-fro.org/?q=<type shape>` — Mathlib by type
-     signature (e.g., `?n ?p → Nat.Prime ?p → ?p ∣ ?n`).
-   - `https://leansearch.net/?q=<English statement>` — natural
+   - **loogle** — `WebFetch https://loogle.lean-lang.org/json?q=<type
+     shape>`: Mathlib by type signature (e.g.,
+     `?n ?p → Nat.Prime ?p → ?p ∣ ?n`); JSON `hits[]` carry
+     name/module/type. (`loogle.lean-fro.org` is dead — use `lean-lang.org`.)
+   - **leansearch** — POST, not WebFetch: `curl -s -X POST
+     https://leansearch.net/search -H 'Content-Type: application/json'
+     -d '{"query":["<English statement>"],"num_results":5}'`: natural
      language → Mathlib lemma.
-   - `https://reservoir.lean-lang.org/?q=<keyword>` — non-Mathlib
-     Lean packages (BET PFR, the Liquid Tensor Experiment, individual
-     formalization repos accompanying recent arXiv preprints).
+   - **reservoir** — `WebFetch
+     https://reservoir.lean-lang.org/api/v1/packages/<owner>/<package>`
+     (JSON) or `…/packages` to browse: non-Mathlib Lean packages (PFR,
+     the Liquid Tensor Experiment, formalization repos accompanying
+     recent arXiv preprints).
 
    When you find a Mathlib hit, record the **precise module path**
    (e.g., `Mathlib.NumberTheory.Primes.Basic`) so the formalist can

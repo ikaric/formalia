@@ -501,27 +501,79 @@ are someone has already looked.
 
 A lot of "trying" is reading. Before sketching anything non-trivial:
 
+Access-method note (verified 2026-05): `WebFetch` is **GET-only** and
+several of these sites are JS single-page apps or POST APIs, so the
+working channel differs per source. The exact recipes below are
+firsthand-confirmed against the live endpoints — prefer them over
+guessing a `?q=` form.
+
 1. **Mathlib first** (the novelty gate):
-   - `WebFetch https://loogle.lean-fro.org/?q=<type shape>` — does
-     Mathlib already have it?
-   - `WebFetch https://leansearch.net/?q=<English statement>` —
-     natural-language Mathlib query.
-   - `WebFetch https://reservoir.lean-lang.org/?q=<keyword>` —
-     non-Mathlib Lean packages.
-2. **arXiv search**: pick the category that matches the problem
-   (`math.NT`, `math.CO`, `math.MG`, …). Restrict to last 3–5 years
-   for state-of-the-art.
-3. **Google Scholar**: for citation counts and finding the survey
-   article that hands you the modern lay of the land in one read.
-4. **MathOverflow**: search the question phrase verbatim. If a
-   serious mathematician has asked it, the answers will name the
-   obstruction.
-5. **Domain-specific frontiers** — Polymath wiki + Tao's blog for
-   analytic NT and combinatorics; erdosproblems.com (Thomas Bloom)
-   for Erdős problems; the AIM problem lists; the Polymath project
-   pages; the relevant subfield's open-problem registries.
+   - **loogle** (type-shaped query) — `WebFetch
+     https://loogle.lean-lang.org/json?q=<type shape>`. The JSON API
+     returns `hits[]` with `name`/`module`/`type`/`doc`; URL-encode
+     `->`, spaces, `|-`. (The old `loogle.lean-fro.org` host is
+     **dead** — NXDOMAIN; the `/?q=` HTML form is a JS SPA. Use the
+     `lean-lang.org` `/json?q=` endpoint.)
+   - **leansearch** (English query) — POST, **not** `WebFetch` (the
+     site is GET→405 and a JS SPA). Use `curl`:
+     ```sh
+     curl -s -X POST https://leansearch.net/search \
+       -H 'Content-Type: application/json' \
+       -d '{"query":["<English statement>"],"num_results":5}'
+     ```
+     `query` is a JSON **array**; the response is a JSON array of
+     `{result:{name,signature,module_name,…},distance}`.
+   - **reservoir** (non-Mathlib Lean packages) — the `?q=` search box
+     is client-side JS (returns junk to any server fetch). For a known
+     package: `WebFetch
+     https://reservoir.lean-lang.org/api/v1/packages/<owner>/<package>`
+     (clean JSON). To browse: `WebFetch
+     https://reservoir.lean-lang.org/packages` (server-rendered).
+   - **mathlib4_docs** (fallback when loogle is unreachable) — fetch
+     the per-declaration page by module path: `WebFetch
+     https://leanprover-community.github.io/mathlib4_docs/<Module/Path>.html`
+     (e.g. `…/Mathlib/Data/Nat/Prime/Infinite.html`). The site's own
+     `search.html` is a JS shell — don't fetch it expecting results.
+2. **arXiv search**: the HTML form `WebFetch
+   https://arxiv.org/search/?searchtype=all&query=<terms>` is
+   server-rendered and works; the Atom API `WebFetch
+   https://export.arxiv.org/api/query?search_query=cat:math.NT+AND+all:<terms>&max_results=N`
+   is the structured option (**space requests ≥3 s** — it returns
+   HTTP 429 on rapid/shared-IP calls; for an exact phrase use
+   URL-encoded quotes `all:%22prime+gaps%22`, else `+` is parsed as
+   OR). Pick the category matching the problem (`math.NT`, `math.CO`,
+   `math.MG`, …); restrict to the last 3–5 years for state-of-the-art.
+3. **Google Scholar** (`WebFetch
+   https://scholar.google.com/scholar?q=<terms>`): citation counts and
+   the survey that hands you the modern landscape. Usually fetchable
+   (server-rendered); if it returns a CAPTCHA, retry once, then fall
+   back to `WebSearch` with `allowed_domains=["scholar.google.com"]`.
+4. **MathOverflow**: `WebFetch` is **blocked** for `mathoverflow.net`
+   *and* the Stack Exchange API in this harness — every fetch errors
+   at the tool level. Use the **`WebSearch`** tool with
+   `allowed_domains=["mathoverflow.net"]` and the question phrase
+   verbatim, then open the surfaced thread links. If a serious
+   mathematician has asked it, the answers will name the obstruction.
+5. **Domain-specific frontiers**:
+   - **Polymath wiki** — `WebFetch
+     https://michaelnielsen.org/polymath/index.php?title=<Page>`
+     (e.g. `title=Main_Page`, `title=Polymath1`). The `asone.ai/polymath`
+     mirror is unreachable via WebFetch; the `michaelnielsen.org` host
+     serves the same (archival, read-only since 2020) content.
+   - **Tao's blog** — `WebFetch https://terrytao.wordpress.com/`;
+     full-text search `…/?s=<terms>`.
+   - **erdosproblems.com** (Thomas Bloom) — per-problem pages
+     `https://www.erdosproblems.com/<N>`. Cloudflare returns **403** to
+     WebFetch's default user-agent; fetch with a browser UA via `curl
+     -A "Mozilla/5.0 … Chrome/120 Safari/537.36" https://www.erdosproblems.com/<N>`,
+     or surface the page via `WebSearch`.
+   - **AIM open-problem lists** — `WebFetch
+     https://aimath.org/problemlists/` (the interactive `aimpl.org`
+     backend has an **expired TLS cert** — route through the
+     `aimath.org` index, not direct `aimpl.org` links).
 6. **Wikipedia**: only as an index of theorem names, never as a
-   citation.
+   citation. `WebFetch https://en.wikipedia.org/wiki/<Article_Title>`
+   (server-rendered; spaces→`_`, percent-encode special chars).
 
 When you find a relevant result, record its precise reference in
 `manuscript/proof.tex` *immediately*, even before using it.
