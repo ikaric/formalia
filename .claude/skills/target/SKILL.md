@@ -54,10 +54,10 @@ continue and tell the user to run `make init` first.
 
 # Interactive elicitation
 
-Ask the user in **one** batched `AskUserQuestion` call (up to four
-questions). Phrase the questions tightly — the user has already
-chosen to run `/target`, so they know they're about to define a
-problem.
+Ask the user in **one** batched `AskUserQuestion` call (the tool caps
+at four questions, and we use all four). Phrase the questions tightly
+— the user has already chosen to run `/target`, so they know they're
+about to define a problem.
 
 1. **Problem display name** (short — used in the ROADMAP issue
    title, the manuscript title, and the Lake module path). Free-text.
@@ -69,15 +69,32 @@ problem.
    methods / additive combinatorics / extremal set theory / discrete
    or combinatorial geometry / other.
 3. **Problem statement** (one paragraph). Free-text. The user pastes
-   the precise statement.
-4. **Initial attack vectors** (optional). Free-text — up to 3 short
-   pointers, one per line, or "let librarian propose" to defer to the
-   first /solve session.
+   the precise statement. *Guidance text on this field:* "Optionally
+   end with up to 3 initial attack vectors, one per line prefixed
+   `vector:`, or write nothing to let the librarian propose them."
+   (Initial vectors are seeded from these lines; this avoids spending
+   a separate question on an optional input.)
+4. **Expected scope** (the calibration that prevents overkill).
+   Single-select — maps directly to the scope tier (see CLAUDE.md
+   §"Scope tiers"):
+   - **T1 — known / textbook**: "Formalize exactly the stated claims,
+     then halt. One short session (minutes)." Pick this when the asks
+     are settled/known and small.
+   - **T2 — bounded-hard**: "A finite or known-hard target; enumerable
+     sub-lemmas; partial progress counts."
+   - **T3 — open problem**: "A genuine open problem; reductions,
+     partial results, surveys expected."
+   When the user is unsure, **default to T2**. Choose T1 only when the
+   asks are explicitly small and settled. The tier is a scope/contract
+   choice, never an outcome prediction — do not phrase any option as
+   "this can/can't be solved."
 
-If the user has *already* supplied this information in the
+If the user has *already* supplied any of this information in the
 conversation context above the `/target` invocation, use that
 directly and skip the corresponding question(s) — do not bother the
-user twice.
+user twice. (If scope is genuinely undeterminable from context, still
+ask question 4 — mis-scoping is the failure this calibration exists to
+prevent.)
 
 # Compute the Lake identifier
 
@@ -138,19 +155,40 @@ unconditionally.)
 
 # Toolchain verification
 
-Run these in **parallel** as a single Bash batch:
+**Tell the user up front** (one line, before running anything): "Lean
+toolchain + Mathlib cache is a one-time ~3 GB download — the next step
+takes several minutes on a fresh machine; this is a download, not a
+hang." Then run the steps **separately**, in order, each verified —
+do **not** chain `lake exe cache get && lake build` in one Bash call
+(a single chained invocation has thrown `Invalid tool parameters`, and
+chaining hides which half failed):
 
+**Step A — toolchain (idempotent):**
 ```sh
-elan toolchain install $(cat formal/lean-toolchain)   # idempotent
-(cd formal && lake exe cache get && lake build)        # pull Mathlib cache + build
+elan toolchain install $(cat formal/lean-toolchain)
 ```
 
-The cache fetch is ~3 GB on a fresh machine; subsequent clones share
-the global Lake cache so this is fast. If `lake build` fails on a
+**Step B — pull the prebuilt Mathlib cache, then verify it landed:**
+```sh
+(cd formal && lake exe cache get)
+ls formal/.lake/packages/mathlib/.lake/build/lib >/dev/null 2>&1 \
+  && echo "cache OK" || echo "cache MISSING — re-run cache get"
+```
+If the verify prints `MISSING` or only a partial tree, re-run `cache
+get` before building (a partial cache makes Step C recompile Mathlib
+from scratch — tens of minutes).
+
+**Step C — build, with the diagnostic:**
+```sh
+(cd formal && lake build)
+```
+If this step starts compiling Mathlib modules from scratch (rather
+than finishing in seconds against the cached `.olean` files), Step B
+did not land — stop and re-run Step B. If `lake build` fails on a
 fresh template (the per-concept stub is empty), investigate before
 proceeding — a non-buildable template is a bug, not a user problem.
 
-In parallel, ensure the Python venv exists:
+Separately, ensure the Python venv exists:
 
 ```sh
 uv sync   # creates .venv/ from pyproject.toml + uv.lock
@@ -318,7 +356,7 @@ After elicitation:
    - **Roadmap**: [#1](../../issues/1) — sub-lemma checklist with progress meter
    - **Verified results**: 0 / TBD (first `/solve` session will populate)
    - **Current focus**: librarian survey + grounded initial sketch
-   - **Manuscript**: [`proof.pdf`](manuscript/proof.pdf) — rebuilt every session
+   - **Manuscript**: [`proof.pdf`](manuscript/proof.pdf) — rebuilt per promotion
    <!-- END STATUS -->
 
    ## What's verified
@@ -335,6 +373,21 @@ After elicitation:
    `numerical`, `conditional`, `survey`, `review`, `deadend`)
    indicating their verification state.
    <!-- END OPEN -->
+
+   ## Assessment
+
+   <!-- BEGIN ASSESSMENT -->
+   - **Target progress**: 0 / TBD sub-lemmas verified
+   - **Verified vs sketched**: 0 verified, 0 sketched, 0 numerical
+   - **Obstructions logged**: none yet
+   - **What the evidence shows**: project just initialised; no attempts made.
+   <!-- END ASSESSMENT -->
+
+   ## Timeline
+
+   <!-- BEGIN TIMELINE -->
+   *No sessions yet — the first `/solve` session will append the first entry.*
+   <!-- END TIMELINE -->
 
    ## Repository tour
 
@@ -367,10 +420,12 @@ After elicitation:
    ````
 
    **Required invariants of the per-clone README:**
-   - The three sentinel pairs `<!-- BEGIN STATUS -->` /
+   - The **five** sentinel pairs `<!-- BEGIN STATUS -->` /
      `<!-- END STATUS -->`, `<!-- BEGIN VERIFIED -->` /
      `<!-- END VERIFIED -->`, `<!-- BEGIN OPEN -->` /
-     `<!-- END OPEN -->` must remain in the file (exact spelling,
+     `<!-- END OPEN -->`, `<!-- BEGIN ASSESSMENT -->` /
+     `<!-- END ASSESSMENT -->`, and `<!-- BEGIN TIMELINE -->` /
+     `<!-- END TIMELINE -->` must remain in the file (exact spelling,
      one per line) — `/solve`'s session-end protocol locates them
      by string match and rewrites the content between them.
    - The `<DisplayName>` in path links must be the per-clone Lake
@@ -430,7 +485,13 @@ for spec in \
   "deprioritized:D4D4D4:Retired vector / approach (deferred, not dead)" \
   "vector:FBCA04:Live attack vector (managed by /vector)" \
   "formal-lean:1A237E:Lean formalization work" \
-  "formal-numerics:3F51B5:Python / computational work"
+  "formal-numerics:3F51B5:Python / computational work" \
+  "novel:B60205:Verified result that is genuinely new (critic+librarian confirmed)" \
+  "formalization:5319E7:Verified port of a known result not yet in Mathlib" \
+  "known-cited:C5DEF5:Closed by importing/citing a result already in Mathlib/Reservoir" \
+  "tier-T1:0E8A16:Scope tier T1 — known/textbook" \
+  "tier-T2:FBCA04:Scope tier T2 — bounded-hard" \
+  "tier-T3:D93F0B:Scope tier T3 — open problem"
 do
   IFS=':' read -r name color desc <<< "$spec"
   gh label create "$name" --color "$color" --description "$desc" 2>/dev/null || true
@@ -452,16 +513,68 @@ start applying these labels in subsequent sessions.
 # GitHub: open ROADMAP issue
 
 Open issue #1 — the ROADMAP — using `gh issue create`. Add the
-`roadmap` label.
+`roadmap` label **and** the `tier-T<k>` label for the elicited scope
+tier.
+
+**First, decompose the user's statement into its literal asks** — one
+checkbox per thing the user actually asked for, `N` = the number of
+literal asks. A "comment on" / "note that" / "as bonus commentary" ask
+becomes **one** checkbox whose deliverable is a short manuscript remark
+plus a citation — **never** a formalization vector and **never**
+expanded into sub-lemmas. This 1:1 decomposition is the ROADMAP
+contract. (Worked example for "∑ pₙ/n! converges; note it has no closed
+form; relate to e": exactly 3 checkboxes — `converges` = 1 Lean
+theorem; `no closed form` = 1 cited remark; `relation to e` = 1
+paragraph. N=3, halts at 3/3. The full irrationality reduction is out
+of scope — that is the overkill this decomposition prevents.)
 
 Title: `ROADMAP — <problem display name>`
 
 Body uses **GitHub task-list syntax** so checkboxes auto-tick when
-linked issues close (`- [ ] #N <title>`). At creation time, issue
-#2 is the librarian survey (created next, see below). If the user
-supplied vectors, issues #3..#(2+k) are per-vector issues.
+linked issues close (`- [ ] #N <title>`). Branch the body and the
+seeded issues on the scope tier:
+
+**T1 (known/textbook):** Do **not** seed a standing librarian-survey
+issue and do **not** seed an `## Attack vectors` section — the survey
+issue is the exact entry point that escalates a trivial problem into
+hours of work. Open **one issue per literal ask** (small — usually
+≤3), labelled `open` + the right kind label (`formal-lean` for a claim
+to prove, otherwise plain `open` for a remark/citation ask). The first
+`/solve` session rips through them (novelty gate → formalize or cite →
+promote → rebuild PDF) and halts at `N/N` in a single short session.
+Body:
 
 ```markdown
+## Scope tier: T1 — known/textbook (formalize the stated asks, then halt)
+
+## Problem
+
+<user-supplied paragraph>
+
+## Top-3 next subgoals (refreshed each session end)
+
+1. [#2 <first literal ask>](../issues/2) — <one-line deliverable>
+2. [#3 <second literal ask>](../issues/3) — <one-line deliverable>
+3. [#4 <third literal ask>](../issues/4) — <one-line deliverable>
+
+## Required sub-lemmas
+
+- [ ] #2 <first literal ask> — <deliverable: e.g. "1 Lean theorem">
+- [ ] #3 <second literal ask> — <deliverable: e.g. "cited remark">
+- [ ] #4 <third literal ask> — <deliverable: e.g. "one paragraph">
+
+## Progress
+
+*0 / N sub-lemmas closed.*
+```
+
+**T2 / T3 (bounded-hard / open):** Seed the literal-ask checkboxes
+**and** the librarian survey (issue #2) **and**, if the user supplied
+vectors, the per-vector issues. Body:
+
+```markdown
+## Scope tier: T<2|3> — <bounded-hard | open problem>
+
 ## Problem
 
 <user-supplied paragraph>
@@ -475,7 +588,7 @@ supplied vectors, issues #3..#(2+k) are per-vector issues.
 ## Required sub-lemmas
 
 - [ ] #2 Literature survey: SOTA + 3 closest predecessors + 3 attack vectors
-- [ ] (more added by /solve as work progresses)
+- [ ] (one checkbox per literal ask; more added by /solve as work progresses)
 
 ## Attack vectors
 
@@ -494,8 +607,8 @@ supplied vectors, issues #3..#(2+k) are per-vector issues.
 *0 / N sub-lemmas closed.*
 ```
 
-Then open issue #2 — the librarian survey — with labels `open +
-survey`:
+**For T2/T3 only**, then open issue #2 — the librarian survey — with
+labels `open + survey`:
 
 Title: `Literature survey — <problem display name>: SOTA bounds and attack vectors`
 
@@ -508,11 +621,15 @@ First /solve session: dispatch the librarian agent to:
 2. Locate the closest published bound on the target problem.
 3. Identify the last 3 years of arXiv activity on the topic.
 4. Propose 3 candidate attack vectors with one-line rationale each.
+5. Seed `findings/research-state.md` with the known-vs-open picture
+   and a per-checkbox novelty hint.
 
-Output: `findings/lit-<topic>-<date>.md` referenced from this issue.
+Output: `findings/lit-<topic>-<date>.md` + `findings/research-state.md`
+referenced from this issue.
 ```
 
-If the user supplied concrete attack vectors at elicitation time,
+For T2/T3, if the user supplied concrete attack vectors at elicitation
+time (the `vector:`-prefixed lines on the problem-statement field),
 also open issues #3..#(2+k) — one per vector — with labels `open +
 vector + vector-V<N>` (auto-incrementing N starting at 1):
 
@@ -540,25 +657,76 @@ target: initialize for <problem display name>
 Bootstrap of a fresh formalia clone.
 - Lake project renamed Formalia → <Identifier>.
 - Problem statement seeded in manuscript/proof.tex.
-- GitHub labels created (roadmap, verified, sketch, survey, …).
-- ROADMAP opened as issue #1 with seeded sub-lemma + attack-vector checklist.
-- Librarian-survey scheduled as issue #2.
-- <k> attack-vector issues opened (#3..#(2+k)), if applicable.
+- Scope tier: T<k>.
+- GitHub labels created (roadmap, verified, sketch, survey, novelty, tiers, …).
+- ROADMAP opened as issue #1 (tier-T<k>) with the literal-ask checklist.
+- (T2/T3) Librarian-survey scheduled as issue #2; <k> vector issues opened.
+- (T1) One issue per literal ask opened.
 Ready for /loop /solve.
 ```
 
 Push to `origin/main`.
 
+# T1 fast-completion (one-shot for already-formalized asks)
+
+**T1 clones only.** After the bootstrap commit, run the **novelty
+gate** — loogle + leansearch via `WebFetch`, the cheap direct queries,
+*not* the heavyweight `librarian` agent — on each literal ask. The
+goal: if the asks already live in Mathlib, `/target` should finish the
+whole thing here, so a textbook target (e.g. "there are infinitely
+many primes" → `Nat.exists_infinite_primes`) becomes a one-shot:
+bootstrap → import wrapper → built PDF → closed ROADMAP, no separate
+`/solve` needed.
+
+For each literal ask the gate confirms is **already in Mathlib** (a
+pure import/re-export, no real proof obligation):
+
+1. Write `formal/<Identifier>/<Ask>.lean` importing the Mathlib module
+   and re-exporting the result under `namespace «<Identifier>»`. Build:
+   `(cd formal && lake build)`. Capture `#print axioms <name>` — it
+   must list only the three foundational axioms.
+2. Promote the manuscript entry to
+   `% [verified: formal/<Identifier>/<Ask>.lean] [known-cited]` with
+   the Mathlib module path cited (follow the promotion-rewrite policy
+   in `.claude/skills/solve/SKILL.md` § Manuscript style — this is a
+   real rewrite, not a tag flip), and add the theorem footnote.
+3. Rebuild the PDF; commit `formalize:`, `promote:`, `pdf:` (separate
+   commits, push each). Close the ask's issue (`Closes #N`), labels
+   `known-cited` + `verified`, drop `open`.
+
+A pure import wrapper of a Mathlib result does not need a full `critic`
+round — confirm by hand that the imported lemma states exactly the
+claim and that `#print axioms` is clean. **Anything beyond a pure
+re-export — a result that needs an actual (even short) proof — is NOT
+done here.** Leave its issue `open` and hand it to the first `/solve`
+session (its T1 fast-path finishes it with the full verify cycle,
+critic included). `/target` does import wrappers, not proofs.
+
+**If every literal ask closed this way** (a fully-in-Mathlib T1
+target), the clone is already at `N/N`: refresh the README STATUS /
+VERIFIED / ASSESSMENT / TIMELINE blocks and the ROADMAP `## Progress`
+line, run the ticket sweep (everything closed except the ROADMAP),
+commit `status: target reached at /target — N/N (all asks already in
+Mathlib)`, push, and report **target reached** (see below). No `/solve`
+invocation is required.
+
 # Report back to user
 
-Output 3–4 sentences:
-- Problem display name + ROADMAP issue URL.
-- Number of issues seeded (ROADMAP + librarian survey + N vector
-  issues).
-- "Run `/loop /solve` to begin work."
+**If the T1 one-shot completed the target** (`N/N`, all asks closed):
+output 3–4 sentences — problem display name + ROADMAP URL; "target
+reached at bootstrap — all asks were already in Mathlib (cite the
+module path[s])"; built `proof.pdf` is committed; "nothing to run —
+inspect the PDF, or `/vector add` to extend the scope." Do **not**
+tell the user to run `/loop /solve` in this case.
 
-Then stop. **Do not start the work loop yourself.** That is
-/solve's job.
+**Otherwise** (T2/T3, or a T1 with asks still needing proof): output
+3–4 sentences — problem display name + ROADMAP URL; number of issues
+seeded (and, for T1, how many asks the novelty gate already closed as
+import wrappers); "Run `/loop /solve` to begin work."
+
+Then stop. **Do not start the open-ended work loop yourself** — the
+T1 import-wrapper one-shot above is the only work `/target` performs;
+all sketch/proof/critic work belongs to `/solve`.
 
 # Anti-patterns
 
@@ -579,11 +747,15 @@ Then stop. **Do not start the work loop yourself.** That is
   organically as /solve runs.
 - Don't pre-decide which subagent will work first. /solve picks
   based on the open issue queue.
-- Don't dispatch the librarian yourself. `/target` is purely
-  bootstrap; survey work belongs to a /solve session so the full
-  verify cycle applies.
+- Don't dispatch the `librarian` agent yourself. `/target` is
+  bootstrap; survey work belongs to a /solve session. (The **cheap
+  novelty gate** — loogle + leansearch via `WebFetch` — is the one
+  exception, run for T1 clones in the fast-completion step above; that
+  is not the librarian agent.)
 - Don't write to `formal/<Identifier>/` beyond `Main.lean`'s empty
-  stub. The first /solve session populates it.
+  stub — **except** the T1 fast-completion import wrappers above, which
+  are pure Mathlib re-exports. Any result needing an actual proof is
+  left for the first /solve session.
 - Don't write to `findings/` beyond the INDEX.md.
 - Don't pre-install Mathlib-adjacent packages (Reservoir packages,
   SAT solvers, sage) at `/target` time. The first subgoal that

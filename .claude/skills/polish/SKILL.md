@@ -248,11 +248,15 @@ every citation." Then integrate.
 Final grep, before rebuilding:
 
 ```sh
-grep -nE '\\section\{(Initial attack vectors|Roadmap|Plan|Revision history|Status|Current focus|Verified results|Sketches)\}|Critic review|\[verified: formal/' manuscript/proof.tex
+grep -nE '\\section\{(Initial attack vectors|Roadmap|Plan|Revision history|Status|Current focus|Verified results|Sketches)\}|Critic review|\\texttt\{\[verified' manuscript/proof.tex
 ```
 
 Any hit indicates leftover scaffolding. Address each one before
-the final commit.
+the final commit. (Note: the machine-readable `% [verified:
+formal/…] [novelty]` **comment** lines above each theorem are
+legitimate and mandated — they are invisible in the PDF and must
+stay. The ban is only on the *visible* `\texttt{[verified: …]}` form
+appearing in a theorem header, which is what this grep targets.)
 
 # Critic adversarial pass on the polished draft
 

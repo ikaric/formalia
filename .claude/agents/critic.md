@@ -76,6 +76,16 @@ not a review.
     may not call a `[conditional on X]` lemma in its proof. If it
     does, it inherits the `[conditional on X]` tag. Don't let
     downstream proofs quietly drop the conditional tag.
+11. **Novelty-label honesty (confirm `novel` claims).** When a
+    promotion proposes the `novel` novelty tag, you are the
+    confirmation gate. Cross-check `findings/research-state.md`, the
+    librarian's verdict, and a quick loogle/leansearch: is this really
+    new, or a known result / Mathlib cousin dressed up? Mislabeling a
+    known result as `novel` is fabrication of the **same severity** as
+    claiming an unproved theorem — reject it and require
+    `formalization` or `known-cited` instead. (Labeling a genuine
+    re-proof as `formalization` is fine and valuable; only the false
+    `novel` is the violation.)
 
 ### Operating protocol
 

@@ -161,6 +161,45 @@ definition is a deliberate user-driven step.
     once the target is reached — that's anti-overreach territory,
     blocked by the halt above.
 
+    **Scope-fidelity gate (run before formalizing OR auto-opening).**
+    Anti-overreach has a depth dimension, not only breadth. Before
+    you formalize anything or open any vector, ask: *does this
+    discharge a seeded checkbox at the depth that checkbox asks?* A
+    checkbox whose deliverable is a one-line remark or a cited known
+    result is discharged by that remark/citation — **not** by
+    formalizing the cited result. If the work is deeper than the
+    checkbox asks, you are over-deepening: stop and discharge at the
+    stated depth. (This is the rule `sum-divergence-check` violated by
+    machine-checking a 436-line reduction of an irrationality theorem
+    it was only asked to cite.) A genuinely-required sub-lemma *on the
+    critical path* to a checkbox legitimately spawns a visible ticket
+    and is worked; over-deepening a shallow checkbox does not. The gate
+    blocks doing **more** than asked; it never excuses doing **less**.
+    See CLAUDE.md §"Scope fidelity".
+
+    **Never auto-close the ROADMAP.** Reaching `N/N` halts the *loop*,
+    not the ROADMAP issue. The ROADMAP stays open until the *user*
+    closes it. Every other issue is closed at session end by the
+    ticket sweep (Session-end Step 5a), so at rest exactly one issue
+    is open — the ROADMAP.
+
+    **Halt condition 2 — exhaustion.** If at a pick-subgoal step the
+    open queue is empty *after the ticket sweep* AND no scope-advancing
+    vector can be auto-opened (per the gate above), the seeded lines
+    are exhausted even if the meter still reads `X/N` for `X < N`.
+    Write `findings/decision-exhausted-<date>.md`, run the sweep, and
+    emit the exhaustion halt message:
+
+    > Work queue exhausted: ROADMAP #\<N\> at \<closed\>/\<total\>,
+    > all open sub-issues swept closed (verified → `verified`,
+    > exhausted → `deadend`, deferred → `deprioritized`). One open
+    > issue remains — the ROADMAP. No further vector advances the
+    > seeded target within scope. Halting `/loop /solve`. To continue:
+    > `/vector add` (new lane) or `/vector pivot` (new posture).
+
+    Then skip `ScheduleWakeup`. (`N/N` halt → suggest `/polish`;
+    exhaustion halt → suggest `/vector`. Both leave one open issue.)
+
     Edge cases:
     - `total == 0` (fresh `/target` clone, no checkboxes yet seeded):
       not reached; proceed normally.
@@ -199,6 +238,17 @@ wrapper, cite the upstream commit. Treat as a verified import.
 
 If the result is in arXiv but not formalized: the subgoal becomes
 "port to Lean" with the citation. Run the standard verify cycle.
+
+**Record the novelty tag.** The gate's outcome *is* the result's
+novelty classification, carried forward to the manuscript comment, the
+closing issue label, and the README VERIFIED table:
+- Mathlib (or Reservoir) already has it → **`known-cited`**.
+- Known in the literature, not in Mathlib, you port it → **`formalization`**.
+- Gate + `librarian` find no prior art → eligible for **`novel`**
+  (critic must confirm before the `novel` label is applied; mislabeling
+  a known result `novel` is fabrication, per CLAUDE.md §"Novelty
+  taxonomy"). This is honest labeling, not a gate — formalizing a known
+  result is still valuable, it just gets the honest label.
 
 **The gate is non-optional.** Skipping it is the canonical way to
 burn a session reformalizing folklore that already lives in Mathlib.
@@ -377,8 +427,11 @@ Then in another parallel batch:
    (e.g. a critic review that landed since).
 
 7. Synthesize the current state in 2–3 sentences. Update STATUS.md
-   (current focus + last commit + blocker). Commit:
-   `status: session resume — <one-line current-focus>` and push.
+   (current focus + last commit + blocker). **Note the current
+   `git rev-parse --short HEAD`** — this is the start-of-session SHA
+   for the TIMELINE block's commit-range compare link (session-end
+   Step 4). Commit: `status: session resume — <one-line
+   current-focus>` and push.
 
 8. **Sanity-build.** `(cd formal && lake build)` — one command
    builds the whole Lake project incrementally. If anything regresses
@@ -386,6 +439,35 @@ Then in another parallel batch:
    adding new content. (On a freshly-`/target`-bootstrapped clone,
    `formal/<DisplayName>/` will be empty — `lake build` will exit 0
    trivially.)
+
+# Scope tier and time-to-first-deliverable
+
+Read the `## Scope tier:` line at the top of the ROADMAP body (set by
+`/target`). It governs how this session behaves:
+
+- **T1 (known/textbook).** Rip straight through the literal-ask
+  checkboxes: novelty gate → import wrapper or short formalization →
+  promote → rebuild PDF → close. **Skip the standing librarian survey**
+  (the novelty gate's loogle + leansearch is enough for settled
+  material); do **not** open sub-vectors for a "cite it" / "comment on"
+  checkbox. A T1 clone should reach `N/N` and halt in a **single short
+  session (minutes)** — if you find yourself reaching for a multi-hour
+  formalization on a T1 clone, the scope-fidelity gate has been
+  violated. (`/target` may already have one-shotted the asks that were
+  in Mathlib; just verify, finish any remainder, and halt.)
+- **T2 / T3.** The full machinery applies — librarian survey,
+  `research-state.md`, domain agents, reductions, partial progress.
+
+**Time-to-first-deliverable (every tier).** Optimize for a readable
+deliverable *early*. The first substantive thing a session produces
+should be a *current, compiled* `proof.pdf` reflecting present state
+(build it early even if it only shows the problem statement and first
+sketch), and prioritize landing the **first verified result fast** over
+breadth. A reader who opens `proof.pdf` should see real content within
+the first few commits — not after a multi-hour wait. The PDF is rebuilt
+and committed after every promotion and substantive manuscript change
+(see "Manuscript PDF" and the verify cycle), so the landing-page
+deliverable keeps rewriting itself as the session discovers.
 
 # Subgoal priority (when picking from the Issues queue)
 
@@ -444,22 +526,28 @@ exact sequence:
 5. Dispatch critic adversarially → writes findings/review-<topic>-DATE.md.
 6. If critic PASS: promote in proof.tex per the "Manuscript style"
    section below — update the `% [sketch]` LaTeX comment to
-   `% [verified: formal/<DisplayName>/Foo.lean]`, replace any
-   `\begin{sketch}` block with a publication-quality `\begin{proof}`,
-   pull out auxiliary sub-claims as standalone `\begin{lemma}` blocks
-   with their own `\begin{proof}` blocks, add a discreet footnote on
-   the top-level theorem pointing to the `.lean` file, and update
-   (or create) the `Formal verification` appendix. Do NOT add a
-   "Critic review: PASS" remark inside the manuscript and do NOT
-   update a "Revision history" section — that metadata lives in the
-   closed issue, in `findings/review-<topic>-<date>.md`, and in the
-   git log.
+   `% [verified: formal/<DisplayName>/Foo.lean] [<novelty>]` (the
+   trailing novelty token from the gate: `novel` / `formalization` /
+   `known-cited`), replace any `\begin{sketch}` block with a
+   publication-quality `\begin{proof}`, pull out auxiliary sub-claims
+   as standalone `\begin{lemma}` blocks with their own `\begin{proof}`
+   blocks, add a discreet footnote on the top-level theorem pointing
+   to the `.lean` file, and update (or create) the `Formal
+   verification` appendix. Do NOT add a "Critic review: PASS" remark
+   inside the manuscript and do NOT update a "Revision history"
+   section — that metadata lives in the closed issue, in
+   `findings/review-<topic>-<date>.md`, and in the git log.
 7. Commit `formalize: …` (step 3), `review: critic PASS on …`
-   (step 5), `promote: … [verified]` (step 6). Three commits. Push
-   each.
+   (step 5), `promote: … [verified]` (step 6). Then **rebuild and
+   commit the PDF** — `(cd manuscript && tectonic -X compile
+   proof.tex)`, `git add manuscript/proof.pdf`, `pdf: rebuild after
+   <promotion>`. Four commits. Push each. (The PDF rebuild on every
+   promotion is what keeps the landing-page deliverable fresh — see
+   "Manuscript PDF".)
 8. Comment on the issue with the verifying commit SHA, drop labels
-   `open`/`sketch`, add label `verified`. Use `Closes #N` in commit
-   body so push auto-closes.
+   `open`/`sketch`, add label `verified` **and** the novelty label
+   (`novel` / `formalization` / `known-cited`). Use `Closes #N` in
+   the commit body so push auto-closes.
 9. Update STATUS.md current-focus line. Commit if changed.
 ```
 
@@ -634,7 +722,7 @@ but lets future sessions (and `grep`) determine the verification
 status of each statement:
 
 ```latex
-% [verified: formal/<DisplayName>/Divergence.lean]
+% [verified: formal/<DisplayName>/Divergence.lean] [novel]
 \begin{theorem}\label{thm:divergence}
 The series $\sum_{n=1}^\infty p_n^{\,n}/n!$ diverges.\footnote{Formally
 verified in Lean 4 + Mathlib; see
@@ -649,9 +737,12 @@ Valid tags:
 
 - `% [sketch]` — informal argument present (or no argument yet);
   not yet formalized.
-- `% [verified: formal/<DisplayName>/File.lean]` — formally verified;
-  `lake build` succeeds, `#print axioms` is clean, `critic` review
-  PASS.
+- `% [verified: formal/<DisplayName>/File.lean] [<novelty>]` —
+  formally verified; `lake build` succeeds, `#print axioms` is clean,
+  `critic` review PASS. The trailing `[<novelty>]` token is one of
+  `[novel]` / `[formalization]` / `[known-cited]` (see the novelty
+  gate). The existing `grep -nE '%\s*\[verified: formal/'` still
+  matches — the token is a suffix.
 - `% [conditional on <Hypothesis>]` — depends on a named open
   hypothesis (RH, GRH, etc.).
 - `% [numerical: <range>]` — finite-range computational
@@ -671,7 +762,8 @@ When critic PASS lets you promote a `[sketch]` to
 more than a tag flip:
 
 1. **Update the LaTeX comment** from `% [sketch]` to
-   `% [verified: formal/<DisplayName>/Foo.lean]`.
+   `% [verified: formal/<DisplayName>/Foo.lean] [<novelty>]` (novelty
+   token from the gate: `novel` / `formalization` / `known-cited`).
 2. **Rewrite the proof in publication style.** If the sketch was
    informal ("Step 1 …", "Step 2 …", `\emph{Step 1: ...}`), replace
    with a `\begin{proof}…\end{proof}` block written as flowing
@@ -713,6 +805,23 @@ mathematics in full.
 
 # Work loop
 
+**Narration discipline (do this throughout the loop).** The user
+runs `/loop /solve` unattended and reads the live turn to know what's
+happening — the recurring complaint was having to ask "what's going
+on" during long silent stretches while a subagent ran. So: **before
+every `Agent` dispatch and after every batch returns, emit one concise
+TEXT line** (plain output, not a tool call):
+- On dispatch: `→ [<agent>] <one-clause task> (subgoal #<N>)`
+- On return: `← [<agent>] <one-clause outcome> → next: <what happens with the result>`
+
+Example: `→ [formalist] Containment.lean (subgoal #14)` then
+`← [formalist] compiles sorry-free → next: #print axioms + critic`.
+One sentence each; don't narrate *while* a subagent runs (the dispatch
+line already says what's awaited). This narration is for the live
+terminal only — the durable per-session record is the README TIMELINE
+block (session end). Do **not** post recurring progress comments to
+GitHub issues; that would clutter the tickets the sweep is closing.
+
 Repeat the following cycle until you decide the session is at a
 clean stopping point:
 
@@ -733,13 +842,20 @@ b. **Novelty gate.** Run loogle + leansearch (and librarian if
    neither hits). If Mathlib has the result, the subgoal collapses
    to an import wrapper.
 
-c. **Literature check.** If the subgoal is novel or it has been > a
-   few sessions since this topic was last surveyed, dispatch
-   `librarian` to ground it in recent literature. Save the survey
-   under `findings/lit-<topic>-<YYYY-MM-DD>.md` and add an entry to
-   `findings/INDEX.md`. Comment on the related open issue with the
-   findings path; or if the survey opens a brand-new target, open a
-   new issue.
+c. **Literature check.** *(Skip on T1 clones — the novelty gate
+   suffices for settled material; a full survey on T1 is the 5.7h
+   failure mode.)* If the subgoal is novel or it has been > a few
+   sessions since this topic was last surveyed, dispatch `librarian`
+   to ground it in recent literature. The librarian reads existing
+   findings first (no re-surveying), runs a WebSearch sweep, saves the
+   survey under `findings/lit-<topic>-<YYYY-MM-DD>.md`, and **refreshes
+   `findings/research-state.md`** (the single consolidated known-vs-open
+   picture + per-checkbox novelty hint). Add an entry to
+   `findings/INDEX.md`, and cite `research-state.md` from the ROADMAP
+   body so the research picture is visible from the dashboard. Comment
+   on the related open issue with the findings path; or if the survey
+   opens a brand-new target (subject to the scope-fidelity gate), open
+   a new issue.
 
 d. **Sketch.** Dispatch the appropriate domain agent (`analyst`,
    `sieve-theorist`, `combinatorialist`, `geometer`, `algebraist`,
@@ -765,14 +881,18 @@ f. **Review.** Dispatch `critic` to read the sketch + the `.lean`
 
 g. **Promote.** If steps (e) and (f) succeed:
    - Change the manuscript tag from `[sketch]` to `[verified:
-     formal/<DisplayName>/File.lean]`.
+     formal/<DisplayName>/File.lean] [<novelty>]` (novelty token from
+     the gate).
    - Close the issue with a comment pointing to the commit SHA(s).
    - Update labels on the issue: drop `open`/`sketch`, add
-     `verified` or `numerical`.
+     `verified` or `numerical`, plus the novelty label.
 
-h. **Commit + push.** See "Commit format" below. Reference the
-   issue number in the commit body (e.g., `Closes #17` to auto-close
-   on push).
+h. **Commit + push, then rebuild the PDF.** See "Commit format"
+   below. Reference the issue number in the commit body (e.g.,
+   `Closes #17` to auto-close on push). After a promotion (or any
+   substantive manuscript change), rebuild and commit
+   `manuscript/proof.pdf` (`pdf: rebuild after <reason>`) so the
+   landing-page deliverable stays current — see "Manuscript PDF".
 
 i. **Update STATUS.md** with the new current-focus line (one line
    only) and proceed to (a). Roadmap-level changes go to the ROADMAP
@@ -842,7 +962,8 @@ findings, prior `proof.tex` style), records the choice in
   end, open question, decision, review).
 - A new section or paragraph added to `manuscript/proof.tex`.
 - A new or updated GitHub Issue.
-- A rebuild of `manuscript/proof.pdf` (session end).
+- A rebuild of `manuscript/proof.pdf` (after every promotion and
+  substantive manuscript change, and at session end).
 
 Don't bundle multiple work units into one commit; small commits make
 the GitHub log readable.
@@ -877,11 +998,20 @@ Examples (problem-agnostic):
 - `status: switch focus to <new-subgoal>`
 - `pdf: rebuild proof.pdf after <change>`
 
-# Manuscript PDF (rebuilt on every session end)
+# Manuscript PDF (rebuilt per promotion + at session end)
 
 `manuscript/proof.pdf` is **committed** to the repo so the user can
 read the rendered manuscript directly on GitHub (click the file in
 the file listing to open the inline PDF viewer).
+
+**Rebuild and commit it after every promotion and every substantive
+manuscript change** — not only at session end. This is the
+"rewrite-as-it-discovers" cadence: a reader who opens `proof.pdf`
+should see real content within the first few commits, and watch it
+grow, rather than wait for a multi-hour session to finish. (Skip the
+rebuild for status/chore/findings-only commits that don't touch
+`proof.tex`.) The extra binary churn in git history is an accepted
+trade for visible, early, continuously-fresh deliverables.
 
 Build:
 ```sh
@@ -915,6 +1045,40 @@ getting full. On stop:
    manuscript/proof.pdf` from the project root would fail
    otherwise). Commit `manuscript/proof.pdf` separately as
    `pdf: ...`.
+
+1a. **Ticket sweep — enforce the one-open-issue invariant.** Run this
+   *before* the ROADMAP/README refresh so the meters reflect the
+   swept state. **Invariant: at rest, exactly one issue is open — the
+   ROADMAP.** Find every other open issue and dispose of it:
+
+   ```sh
+   ROADMAP_NUM=$(gh issue list --label roadmap --json number --jq '.[0].number')
+   gh issue list --state open --json number,title,labels \
+     --jq ".[] | select(.number != $ROADMAP_NUM) | .number"
+   ```
+
+   For each returned issue:
+   - **Verified/closed work** → if not already closed by a `Closes #N`
+     commit, close it, drop `open`/`sketch`, add `verified` (and the
+     novelty label).
+   - **Exhausted** (hit the ~30-min anti-stagnation cap, or every
+     seeded search line tried) → close, `--remove-label open
+     --add-label deadend`, comment citing the `findings/deadend-*.md`.
+   - **Deferred** (not dead, just not now) → close, `--add-label
+     deprioritized`, comment "revisit via `/vector add`."
+     (Reuse `/vector retire`'s keyword heuristic: blocked / impossible
+     / barrier / dead-end wording → `deadend`, else `deprioritized`.)
+
+   **Sole carry-over exception:** an issue named in the freshly-written
+   `## Top-3 next subgoals` may stay open *between* sessions (it's the
+   next session's first pick). At a **halt** (`N/N` or exhaustion),
+   even those close — leaving only the ROADMAP. **Never close the
+   ROADMAP** (the user closes it manually). Then assert the invariant:
+
+   ```sh
+   echo "open issues at session end: $(gh issue list --state open --json number --jq 'length') (target at rest: 1 = ROADMAP)"
+   ```
+
 2. **Update the ROADMAP issue**. Three parts:
    - **Body checkboxes**: GitHub auto-ticks `- [ ] #N <title>`
      entries when issue #N closes (via the tracked-in feature).
@@ -930,10 +1094,11 @@ getting full. On stop:
 3. **Update STATUS.md** (one-line `Current focus`; one-liner `Last
    commit`).
 4. **Refresh README.md status blocks.** The per-clone README has
-   three HTML-comment-bounded sections that this protocol keeps in
-   sync with the manuscript and the Issues tab. Rewrite the content
-   between each `<!-- BEGIN X -->` / `<!-- END X -->` pair *without
-   moving or removing the marker lines themselves*.
+   **five** HTML-comment-bounded sections that this protocol keeps in
+   sync with the manuscript and the Issues tab (STATUS, VERIFIED,
+   OPEN, ASSESSMENT, TIMELINE). Rewrite the content between each
+   `<!-- BEGIN X -->` / `<!-- END X -->` pair *without moving or
+   removing the marker lines themselves*.
 
    - **STATUS block** (`<!-- BEGIN STATUS --> ... <!-- END STATUS -->`)
      — five bullets:
@@ -952,24 +1117,29 @@ getting full. On stop:
        ``[`proof.pdf`](manuscript/proof.pdf)`` link.
 
    - **VERIFIED block** (`<!-- BEGIN VERIFIED --> ... <!-- END VERIFIED -->`)
-     — a markdown table, one row per verified theorem:
+     — a markdown table, one row per verified theorem, with a
+     **Novelty** column so a reader can tell a genuine contribution
+     from a re-proof of a known fact at a glance:
 
      ```markdown
-     | Theorem | Lean file | Axiom check |
-     |---|---|---|
-     | <Name> | [`formal/<DisplayName>/<File>.lean`](formal/<DisplayName>/<File>.lean) | clean |
+     | Theorem | Novelty | Lean file | Axiom check |
+     |---|---|---|---|
+     | <Name> | novel | [`formal/<DisplayName>/<File>.lean`](formal/<DisplayName>/<File>.lean) | clean |
      ```
 
      To populate: `grep -nE '%\s*\[verified: formal/' manuscript/proof.tex`
      gives the file references; the theorem name is the
      `\begin{theorem}[Name]` or
      `\begin{theorem}\label{thm:name-slug}` immediately below the
-     tagged line. "Axiom check" is `clean` when `#print axioms`
-     in that file lists only `propext` / `Classical.choice` /
-     `Quot.sound`; `native_decide` warrants the literal
-     `native_decide (critic-approved)`. If no verified results
-     yet, write `*No verified results yet.*` (single italics
-     line, no table).
+     tagged line. **Novelty** is the trailing `[novel]` /
+     `[formalization]` / `[known-cited]` token on the same tag line;
+     if a legacy comment lacks the token, default to `formalization`
+     and flag it for backfill (so the table never breaks). "Axiom
+     check" is `clean` when `#print axioms` in that file lists only
+     `propext` / `Classical.choice` / `Quot.sound`; `native_decide`
+     warrants the literal `native_decide (critic-approved)`. If no
+     verified results yet, write `*No verified results yet.*` (single
+     italics line, no table).
 
    - **OPEN block** (`<!-- BEGIN OPEN --> ... <!-- END OPEN -->`)
      — table of open obligations (cap at ~10 rows; if more,
@@ -988,7 +1158,53 @@ getting full. On stop:
      \<hypothesis\>"; `survey` → "survey"; `review` →
      "under review"; nothing else → "open".
 
-   **Refusing to refresh.** If the three sentinel pairs are
+   - **ASSESSMENT block** (`<!-- BEGIN ASSESSMENT --> ... <!-- END ASSESSMENT -->`)
+     — an **evidence ledger, NOT a forecast** (see CLAUDE.md
+     §"Anti-defeatism" — this block is explicitly bound by the
+     banned-framings rule). Four mechanically-derived bullets:
+     1. **Target progress** — `X / N` rendered as a meter, e.g.
+        `▰▰▰▱▱ 3 / 5 sub-lemmas verified` (`N` = ROADMAP checkbox
+        count, `X` = closed-as-verified).
+     2. **Verified vs sketched** — counts of `[verified]` /
+        `[sketch]` / `[numerical]` / `[conditional]` tags in
+        `proof.tex`.
+     3. **Obstructions logged** — one line per
+        `findings/deadend-*.md`, each `<concrete obstacle>
+        (deadend-….md)`. This is the post-hoc evidence: only obstacles
+        *hit during an attempt* appear here.
+     4. **What the evidence shows** — ONE or TWO sentences strictly
+        summarizing 1–3, **past-tense fact only**. Allowed: "All K
+        seeded vectors were attempted; V reduced to a verified
+        sub-lemma, D hit the obstruction(s) above, R remain in
+        progress." **BANNED** (per CLAUDE.md): "best we can hope for",
+        "this vector cannot settle X", "parity-barrier-blocked", any
+        numeric probability, any sentence forecasting whether the
+        target *will* resolve. State what HAS happened; never forecast
+        what CAN happen. The "likelihood" signal the reader wants is
+        delivered implicitly by the meter + verified ratio + the
+        concrete walls hit — not by a verdict sentence.
+
+   - **TIMELINE block** (`<!-- BEGIN TIMELINE --> ... <!-- END TIMELINE -->`)
+     — a per-session log, **newest first**, one entry per `/solve`
+     session, **capped at the 8 most recent** (when trimming, replace
+     the tail with `… earlier sessions: see [git history](../../commits/main).`).
+     Prepend this session's entry:
+
+     ```markdown
+     ### <YYYY-MM-DD> — <one-clause headline>
+     - Did: <verified N / numerical N / surveys / dead-ends — what landed>
+     - Issues: closed #…; opened #… (omit a half with nothing)
+     - Commits: [`<first7>…<last7>`](../../compare/<first>...<last>)
+     ```
+
+     Build the compare range from the `HEAD` short-SHA captured at
+     resume (Step 7 of the resume protocol committed
+     `status: session resume`) and the current `HEAD`. The entry is
+     written from the same facts as the end-of-session report (one
+     source, two renderings — terminal report is ephemeral, this is
+     the durable GitHub twin).
+
+   **Refusing to refresh.** If any of the five sentinel pairs are
    missing from `README.md`, the clone was either not bootstrapped
    by `/target` or the README was hand-edited destructively.
    Append a one-line "skipped README refresh — sentinel(s) missing"
@@ -996,15 +1212,21 @@ getting full. On stop:
    scratch (that's `/target`'s job, not `/solve`'s).
 
 5. Commit: `status: session end — <one-line summary>` and push.
-6. **Re-run the target-reached check** (per Resume Protocol Step 0).
-   If this session's commits just ticked the final checkbox in the
-   ROADMAP body (`CLOSED == TOTAL`), the target is now reached:
-   - Output the halt message exactly as specified in Step 0 of the
-     resume protocol (including the actual issue number and the
-     `closed/total` figures).
-   - Do **not** call `ScheduleWakeup`. The `/loop` ends here.
-   - Skip the next bullet's "what's next" framing — the halt message
-     already covers it.
+6. **Re-run the halt checks** (per Resume Protocol Step 0 and Rule 10).
+   Two halt conditions:
+   - **`N/N` reached** — this session's commits just ticked the final
+     checkbox (`CLOSED == TOTAL`): output the `N/N` halt message
+     exactly as in Step 0 of the resume protocol (actual issue number
+     + `closed/total`), suggest `/polish`.
+   - **Exhausted** — the queue is empty post-sweep and no
+     scope-advancing vector can be auto-opened, even though
+     `CLOSED < TOTAL`: write `findings/decision-exhausted-<date>.md`
+     and output the **exhaustion** halt message (Rule 10, Halt
+     condition 2), suggest `/vector`.
+
+   In either case: confirm the sweep left exactly one open issue (the
+   ROADMAP), do **not** call `ScheduleWakeup`, and skip the next
+   bullet's "what's next" framing — the halt message covers it.
 7. If the target is *not* reached, output a brief end-of-session
    report to the user (2–4 sentences): what was committed (verified
    count / numerical count / surveys), which issues were closed,
@@ -1020,12 +1242,26 @@ getting full. On stop:
 - Writing long planning documents without producing a verified
   artifact.
 - Dispatching `librarian` repeatedly without acting on the findings.
+- **Dispatching a subagent with no narration line.** The user is
+  watching the live turn; every `Agent` dispatch needs a `→` line and
+  every return a `←` line (see "Work loop" → narration discipline).
+- **On a T1 clone, dispatching a full librarian survey, or opening a
+  sub-vector / formalizing a reduction for a "cite it" / "comment on"
+  checkbox.** That is the 5.7h overkill failure mode — discharge the
+  checkbox at its stated depth (a remark + citation) and move on.
+- **Over-deepening a checkbox** (formalizing a result the checkbox only
+  asked you to cite/note). Run the scope-fidelity gate first.
+- **Leaving sub-issues open at session end.** The ticket sweep
+  (Session-end Step 1a) must leave exactly one open issue — the
+  ROADMAP. Dangling open vectors were a real failure on a prior clone.
 - Restating the difficulty of the target in different words.
 - Adding `[sketch]` entries to `proof.tex` faster than they get
   promoted (the ratio should approach 1:1 over many sessions).
 - Skipping `critic` review.
 - Forgetting to push (every commit must reach GitHub immediately).
-- Forgetting to rebuild the PDF at session end.
+- Forgetting to rebuild the PDF after a promotion (and at session
+  end) — the early, continuously-fresh PDF is the deliverable that
+  earns the longer run.
 - Opening a new issue when an existing open one already tracks the
   subgoal — comment on the existing one instead.
 - Writing detailed state into STATUS.md when it belongs in an Issue.

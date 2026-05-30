@@ -25,9 +25,10 @@ Formalia is a GitHub template for attacking open mathematical problems with an L
 - **Mathlib reuse before reproof** — a mandatory novelty gate (loogle + leansearch) makes every subgoal start with "is this already formalized?"
 - **Twelve specialist agents** — analyst, sieve theorist, combinatorialist, geometer, algebraist, topologist, probabilist, complexity theorist, formalist, computationalist, librarian, critic
 - **Three slash-commands** — `/target` (bootstrap), `/solve` (autonomous loop), `/vector` (vector lifecycle)
-- **Honest tagging discipline** — every claim is `[verified]` / `[sketch]` / `[conditional]` / `[numerical]` / `[heuristic]`
-- **Publication-quality manuscript** — `manuscript/proof.tex` reads like an arXiv preprint, rebuilt to PDF each session by `tectonic`
-- **GitHub-Issues work queue** — ROADMAP issue with checkbox-tracked sub-lemmas; one repo per problem
+- **Honest tagging discipline** — every claim is `[verified]` / `[sketch]` / `[conditional]` / `[numerical]` / `[heuristic]`, and every verified result is further classified `novel` / `formalization` / `known-cited` so a reader can tell a genuine contribution from a re-proof of a known fact
+- **Scope calibration** — `/target` sets a scope tier (T1 known/textbook · T2 bounded-hard · T3 open) so a textbook problem finishes in minutes and is never over-formalized past what was asked
+- **Publication-quality manuscript** — `manuscript/proof.tex` reads like an arXiv preprint, with `proof.pdf` rebuilt by `tectonic` after every promotion (not just at session end), so the deliverable is readable early and keeps growing
+- **GitHub-Issues work queue** — ROADMAP issue with checkbox-tracked sub-lemmas; at rest exactly one issue is open (the ROADMAP); one repo per problem
 
 The deliverable is a machine-checked Lean 4 proof and a publication-style PDF. LLM output is intuition, not proof; the kernel decides.
 
@@ -61,10 +62,14 @@ make init
 #    Interactive; uses AskUserQuestion. (In Claude Code.)
 /target
 
-# 4. Run autonomously. Designed for unattended multi-hour sessions;
-#    the harness commits and pushes per work unit. Halts on its own
-#    when the ROADMAP shows N/N closed (see "anti-overreach" in
-#    CLAUDE.md).
+# 4. Run autonomously. Designed for unattended sessions; the harness
+#    commits and pushes per work unit, narrates each step in the live
+#    turn, and rebuilds proof.pdf on every promotion (readable early,
+#    not after hours). Halts on its own when the ROADMAP shows N/N
+#    closed OR the seeded lines are exhausted, sweeping all sub-issues
+#    closed so only the ROADMAP stays open (see "anti-overreach" in
+#    CLAUDE.md). A trivial T1 target may already be complete after
+#    /target alone — in that case there's nothing to run here.
 /loop /solve
 
 # 5. (Optional, after the loop halts.) Polish the manuscript for
@@ -193,8 +198,8 @@ Four slash-commands live under `.claude/skills/`. Two interactive, two autonomou
 
 | Skill | Mode | Purpose |
 |---|---|---|
-| **`/target`** | Interactive (`AskUserQuestion`) | One-time bootstrap. Asks for problem name + field + statement + initial vectors. Renames the Lake project from the `Formalia` placeholder. Seeds the manuscript, opens ROADMAP + librarian-survey issues. **Run once per clone.** |
-| **`/solve`** | Autonomous (no user input) | Resumes from ROADMAP + open Issues + git log. Picks the next subgoal, runs the novelty gate, dispatches sub-agents, runs the verify cycle, commits + pushes. Wrap with `/loop /solve` for sustained sessions. Halts automatically when the ROADMAP shows `N/N closed` — see CLAUDE.md § "Anti-overreach". |
+| **`/target`** | Interactive (`AskUserQuestion`) | One-time bootstrap. Asks for problem name + field + statement + **scope tier** (T1/T2/T3). Renames the Lake project from the `Formalia` placeholder. Seeds the manuscript, opens ROADMAP + (for T2/T3) librarian-survey issues, with the ROADMAP decomposed 1:1 to the literal asks. For a T1 target whose asks are already in Mathlib, runs the novelty gate and completes the one-shot (import wrapper → built PDF → closed ROADMAP) — no `/solve` needed. **Run once per clone.** |
+| **`/solve`** | Autonomous (no user input) | Resumes from ROADMAP + open Issues + git log. Picks the next subgoal, runs the novelty gate, dispatches sub-agents (narrating each in the live turn), runs the verify cycle, commits + pushes, rebuilds `proof.pdf` per promotion. Wrap with `/loop /solve` for sustained sessions. Halts on `N/N closed` **or** exhaustion of the seeded lines, sweeping every sub-issue closed so only the ROADMAP remains open — see CLAUDE.md § "Anti-overreach". |
 | **`/vector`** | Interactive (`AskUserQuestion`) | Three modes — `add` (seed a new vector), `retire` (close with reason → `deadend` or `deprioritized`), `pivot` (multi-retire + strategic rationale + replacements, with a `findings/pivot-DATE.md` ceremony). |
 | **`/polish`** | Autonomous (no user input) | Final-pass manuscript polish, run after the loop halts. Audits the `.tex` against publication standards (abstract written, introduction structured, every theorem has a footnote linking to its Lean file, no scaffolding leftover), adds or refines the "Formal verification" appendix with verbatim Lean snippets, runs `critic` over the polished draft, rebuilds the PDF. One commit. |
 

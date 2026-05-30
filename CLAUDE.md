@@ -101,6 +101,57 @@ it every session.
   but high-value — every session that ticks a ROADMAP checkbox is
   progress.)
 
+### Scope tiers (set at `/target`, read every session)
+
+Every clone carries a **scope tier**, elicited by `/target` and
+recorded as a `## Scope tier: T<k> — <gloss>` line at the top of the
+ROADMAP issue body and as a `tier-T<k>` label on the ROADMAP issue:
+
+- **T1 — known/textbook.** The asks are settled, often already in
+  Mathlib or a short port. The job is to formalize *exactly the stated
+  claims*, then halt. A T1 clone should reach `N/N` and stop in a
+  **single short session (minutes, not hours)**.
+- **T2 — bounded-hard.** A finite or known-hard target with enumerable
+  sub-lemmas; partial progress counts.
+- **T3 — open problem.** A genuine open problem; reductions, partial
+  results, and surveys are expected.
+
+The tier is a **scope/contract** statement — how literal the asks are
+and how many checkboxes the ROADMAP carries. It is **never an outcome
+prediction**. A tier must never be written as a reason a sub-step
+*won't be attempted* — that is the banned anti-defeatism framing
+(below). "Halt because the literal asks are complete" (every checkbox
+CLOSED) is anti-overreach and correct; "stop because it's hard" is
+defeatism and banned. The two are not the same and must never be
+conflated.
+
+### Scope fidelity (the depth rule — read before formalizing anything)
+
+Anti-overreach has a depth dimension, not only a breadth dimension.
+Before formalizing **or** auto-opening a vector, run the
+**scope-fidelity gate**:
+
+> Does this artifact discharge a checkbox the user actually seeded, **at
+> the depth that checkbox asks**? A checkbox whose deliverable is a
+> one-line remark or a cited known result is discharged by that remark
+> or citation — **not** by formalizing the cited result. If the work
+> I'm about to do is deeper than the checkbox asks, I am
+> over-deepening: stop, discharge the checkbox at its stated depth, and
+> move on.
+
+This is the rule that the `sum-divergence-check` clone violated when it
+spent hours machine-checking a 436-line reduction of an irrationality
+theorem it was only asked to *cite*. A "comment on", "note that", or
+"as bonus commentary" ask is discharged by a short manuscript remark
+plus a citation — never expanded into a formalization vector.
+
+The discriminator for a sub-lemma: *is it on the critical path to a
+seeded checkbox (then it legitimately spawns a visible ticket and is
+worked), or am I formalizing something the checkbox only asked me to
+cite/note (then it is over-deepening — stop)?* The gate blocks
+over-deepening a shallow checkbox; it never excuses doing **less** than
+a checkbox genuinely asks.
+
 ### Anti-defeatism
 
 "This is famously hard, so it's impossible" is the wrong response.
@@ -137,6 +188,16 @@ in findings notes, in commit messages:
   `[sketch]`, `[conditional]`, `[heuristic]`) at promotion time is
   the safety net. Editorial pessimism upstream is not.
 
+These bans apply to the README **ASSESSMENT block** too. That block is
+an *evidence ledger of what was attempted and what concretely
+obstructed it* — never a forecast. It may state past-tense facts
+(which checkboxes are verified, which obstructions were hit, with a
+pointer to the `findings/deadend-*.md` that documents each) and a
+checkbox/percent meter. It may **not** carry a numeric probability or
+any sentence forecasting whether the target *will* resolve. "What the
+evidence shows" describes what *has happened*; it never predicts what
+*can* happen.
+
 The project's only ceiling is the verify cycle. Attempt fully, tag
 honestly.
 
@@ -157,9 +218,27 @@ items once the original list is complete.
   Detection happens at three points: session start (Resume
   Protocol Step 0), every work-loop pick-subgoal step, and session
   end (Session-end Protocol Step 6). All three checks live in
-  `.claude/skills/solve/SKILL.md`. The user resumes work by
-  invoking `/vector add`, which appends a fresh checkbox to the
-  ROADMAP and re-arms the loop for the next invocation.
+  `.claude/skills/solve/SKILL.md`. **Halting closes the loop, not the
+  ROADMAP issue** — the ROADMAP is *never* auto-closed; only the user
+  closes it (that is their signal to take over with `/vector`). The
+  user resumes work by invoking `/vector add`, which appends a fresh
+  checkbox to the ROADMAP and re-arms the loop for the next invocation.
+- **`/solve` also halts on exhaustion.** If the open work queue is
+  empty after the session-end ticket sweep and no scope-advancing
+  vector can be auto-opened (per the rule below and the scope-fidelity
+  gate), the seeded lines are exhausted: sweep, write
+  `findings/decision-exhausted-*.md`, emit the exhaustion halt message,
+  and skip `ScheduleWakeup`. This is distinct from `N/N` — the meter
+  may still read `X/N` for `X < N` — but the contract is equally
+  satisfied: everything attemptable within the seeded scope has been
+  attempted and tagged honestly.
+- **At rest, exactly one issue is open — the ROADMAP.** Every other
+  issue is closed at session end (verified → `verified`; exhausted →
+  `deadend`; deferred → `deprioritized`), so the Issues tab is a clean
+  signal: one open issue means "harness is between runs / done"; the
+  user then decides whether to add vectors or consider it closed. The
+  ticket sweep that enforces this lives in `/solve`'s session-end
+  protocol.
 - **`/solve` *may* auto-open new vectors while the meter is `X/N`
   for `X < N`**, but only when the new vector visibly advances the
   *original* target — e.g., when a librarian survey identifies a
@@ -482,12 +561,22 @@ session lives at `.claude/skills/solve/SKILL.md` and encodes:
   formalization)
 - the **work loop** (pick subgoal → novelty gate → librarian → domain
   agent → formalist → critic → promote → commit + push)
+- the **narration discipline** (emit a concise text line before and
+  after every subagent dispatch, so the live session is legible
+  without the user having to ask "what's going on")
 - **anti-stagnation** rules (don't loop on one stuck subgoal; ~30 min
   cap before switching)
 - **anti-defeatism** rules (no "this is famously hard" phrasings;
   produce concrete obstacles instead)
-- the **session-end protocol** (rebuild PDF + final ROADMAP +
+- the **session-end protocol** (rebuild PDF + ticket sweep to the
+  one-open-issue invariant + ROADMAP/TIMELINE/ASSESSMENT refresh +
   STATUS.md update + commit + push)
+
+Sessions optimize **time-to-first-readable-deliverable**: build and
+commit a current PDF early (even one showing just the problem statement
+and first sketch) and prioritize landing the first verified result
+fast over breadth. Nobody waits hours to see if it works; quick visible
+wins are what earn the longer run.
 
 In autonomous mode, **never call `AskUserQuestion`** — if a decision
 is required, make the most reasonable one given the precedent in the
@@ -548,16 +637,21 @@ look at:
 
 1. **The per-clone `README.md`** — first thing rendered on the repo
    landing page. After `/target`, it carries the problem statement
-   plus three live blocks bounded by HTML-comment sentinels
-   (`<!-- BEGIN STATUS -->`, `<!-- BEGIN VERIFIED -->`,
-   `<!-- BEGIN OPEN -->`). The session-end protocol in
+   plus **five** live blocks bounded by HTML-comment sentinels:
+   `<!-- BEGIN STATUS -->`, `<!-- BEGIN VERIFIED -->`,
+   `<!-- BEGIN OPEN -->`, `<!-- BEGIN TIMELINE -->` (per-session log,
+   newest first, capped), and `<!-- BEGIN ASSESSMENT -->` (evidence
+   ledger + checkbox/percent meter). The session-end protocol in
    `.claude/skills/solve/SKILL.md` keeps those blocks in sync with
    the manuscript and the Issues queue; do not hand-edit between
    the markers, and do not remove the markers.
 2. **The rendered PDF**: `manuscript/proof.pdf` — committed to the
-   repo, rebuilt at the end of every `/solve` session with
-   `tectonic`. Opens inline on GitHub's file viewer. This is the
-   readable manuscript.
+   repo and rebuilt with `tectonic` **after every promotion and every
+   substantive manuscript change** (not only at session end), so the
+   readable deliverable evolves continuously and a reader sees real
+   content within the first few commits rather than after a multi-hour
+   wait. Opens inline on GitHub's file viewer. (Status/chore/
+   findings-only commits do not trigger a rebuild.)
 3. **The Issues tab** — every subgoal lives here. The ROADMAP issue
    uses GitHub task-list syntax (`- [ ] #N <title>`) so checkboxes
    auto-tick when linked issues close, giving an N/M progress
@@ -582,11 +676,27 @@ The labels:
 | `vector-V<N>` | Specific vector tag (V1, V2, …) — managed by `/vector`. |
 | `formal-lean` | Lean formalization work. |
 | `formal-numerics` | Python / computational work. |
+| `novel` | Verified result that is genuinely new (no prior art found; critic + librarian confirmed). |
+| `formalization` | Verified result that ports a known literature result not yet in Mathlib. |
+| `known-cited` | Closed by importing/citing a result already in Mathlib or a Reservoir package. |
+| `tier-T1` / `tier-T2` / `tier-T3` | Scope tier of the clone — applied to the ROADMAP issue by `/target`. |
 
 Problem-specific labels (a sub-target nickname like `target-T1`, or
 an obligation name like `O1`) are introduced **by `/target` or by
 `/solve` as they become useful**, not pre-defined here. Don't
 inherit them across clones.
+
+**Novelty taxonomy is honest labeling, not a gate.** Every verified
+result is one of `novel` / `formalization` / `known-cited`, decided by
+the novelty-gate outcome plus librarian (prior-art search) and critic
+(who must confirm a `novel` claim, and reject mislabeling a known
+result as `novel` — that is fabrication of the same severity as
+claiming an unproved theorem). Formalizing a known result stays a
+valuable, legitimate deliverable (an import wrapper is high-value); the
+label simply lets a reader tell a genuine contribution from a re-proof
+at a glance. The label flows from the gate into the manuscript tag
+comment, the closing issue label, and the README VERIFIED table's
+"Novelty" column.
 
 Rules:
 - **Only the `/solve` / `/target` / `/vector` / `/polish`
@@ -671,10 +781,12 @@ optional `Formal verification` appendix. Project scaffolding does
 Verification status is carried by a single-line LaTeX comment above
 each theorem (`% [verified: formal/<DisplayName>/X.lean]`, `%
 [sketch]`, `% [conditional on H]`, `% [numerical: range]`, `%
-[heuristic]`). The comment is invisible in the PDF; it lets `grep`
-and future sessions determine status. A discreet footnote on the
-main theorem statement plus a `Formal verification` appendix carry
-the same information to the human reader.
+[heuristic]`). A `[verified: …]` comment carries a trailing novelty
+token — `% [verified: formal/<DisplayName>/X.lean] [novel]` (or
+`[formalization]` / `[known-cited]`). The comment is invisible in the
+PDF; it lets `grep` and future sessions determine status and novelty.
+A discreet footnote on the main theorem statement plus a `Formal
+verification` appendix carry the same information to the human reader.
 
 **Promotion (sketch → verified) is a rewrite, not a tag flip.**
 Replace any informal sketch block with a polished
@@ -721,7 +833,7 @@ not paper structures):
 │       └── polish/SKILL.md            ← final-pass manuscript polish (run after halt)
 ├── manuscript/
 │   ├── proof.tex                      ← canonical evolving manuscript
-│   └── proof.pdf                      ← rendered PDF (committed; rebuilt each session)
+│   └── proof.pdf                      ← rendered PDF (committed; rebuilt per promotion + session end)
 ├── formal/                            ← Lake project root
 │   ├── lakefile.toml                  ← Mathlib pin + library config
 │   ├── lean-toolchain                 ← Lean version pin

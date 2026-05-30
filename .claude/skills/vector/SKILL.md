@@ -293,6 +293,13 @@ Output 3–4 sentences:
 
 ## Always
 
+- **At-rest invariant:** between runs, exactly one issue is open — the
+  ROADMAP (`/solve`'s session-end sweep closes everything else). `add`
+  is the *only* operation that raises the open count, and it opens
+  exactly one issue (the new vector). `retire`/`pivot` only close.
+  This is the user's signal that they've taken the wheel: after a
+  `/solve` halt, the user adds vectors here to re-arm the loop, or
+  leaves the single open ROADMAP as "done for now."
 - `git pull --rebase origin main` before any edits.
 - Push after every commit so the user can see the result on GitHub
   immediately.
