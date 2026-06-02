@@ -647,6 +647,28 @@ First /solve session: librarian to ground this in literature
 sketch; then formalist + critic to attempt the verify cycle.
 ```
 
+# GitHub: pin the ROADMAP issue
+
+Pin the ROADMAP so it surfaces in the pinned-issues card **above** the
+issue list. The at-rest invariant is "exactly one open issue — the
+ROADMAP"; pinning makes that single living tracker the obvious entry
+point for anyone who opens the Issues tab. Capture the number from the
+create step and pin it:
+
+```sh
+ROADMAP_NUM=$(gh issue list --label roadmap --json number --jq '.[0].number')
+gh issue pin "$ROADMAP_NUM" || true
+```
+
+Notes:
+- A repository allows at most **3** pinned issues. `/target` pins
+  exactly one — the ROADMAP. **Never** pin sub-issues, the librarian
+  survey, or vector issues; the pinned slot is reserved for the single
+  living tracker, and `/solve` / `/vector` must not pin anything.
+- `|| true` keeps the step idempotent: pinning an already-pinned issue
+  errors harmlessly, and `/target` refuses to re-run on an initialised
+  clone anyway, so the ROADMAP is created (and pinned) exactly once.
+
 # Commit & push
 
 Commit (single commit is fine — bootstrap is one work unit):
@@ -659,7 +681,7 @@ Bootstrap of a fresh formalia clone.
 - Problem statement seeded in manuscript/proof.tex.
 - Scope tier: T<k>.
 - GitHub labels created (roadmap, verified, sketch, survey, novelty, tiers, …).
-- ROADMAP opened as issue #1 (tier-T<k>) with the literal-ask checklist.
+- ROADMAP opened as issue #1 (tier-T<k>) with the literal-ask checklist, pinned to the repo.
 - (T2/T3) Librarian-survey scheduled as issue #2; <k> vector issues opened.
 - (T1) One issue per literal ask opened.
 Ready for /loop /solve.
