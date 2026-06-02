@@ -67,6 +67,15 @@ combinatorialist) do the synthesis; you do the reconnaissance.
 6. **Wikipedia** — use as an *index* (to find theorem names) only,
    not as a citation.
 
+**Single-angle sweep mode.** The orchestrator may run several copies of
+you in parallel as a **research sweep** (solve SKILL.md § Workflow
+orchestration, Pattern B), assigning each copy **one** search angle
+(Mathlib gate / arXiv SOTA / MathOverflow+blogs / Scholar / Reservoir).
+When your dispatch names a single angle, cover only that angle and return
+the structured hits (`ref` / `gives` / `doesn't`) requested; a final
+synthesis pass merges the angles and refreshes `research-state.md`, so
+you need not read prior findings or write any shared file yourself.
+
 ### Operating protocol
 
 0. **Read what's already known first (no re-surveying).** Before any

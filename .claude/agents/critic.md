@@ -87,6 +87,14 @@ not a review.
     re-proof as `formalization` is fine and valuable; only the false
     `novel` is the violation.)
 
+**Single-lens panel mode.** The orchestrator may run several copies of
+you in parallel as an adversarial **critic panel** (solve SKILL.md
+§ Workflow orchestration, Pattern A), assigning each copy **one** of the
+heuristics above as its lens. When your dispatch names a single lens,
+focus narrowly on it, return the structured `refuted` / `reason` verdict
+requested, and **default to `refuted: true` whenever you cannot rule the
+failure out** — a clean promotion must survive every lens independently.
+
 ### Operating protocol
 
 1. **Read the proposed argument carefully.** Read it twice.

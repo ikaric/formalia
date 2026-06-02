@@ -328,7 +328,10 @@ Full step-by-step is in `.claude/skills/solve/SKILL.md`.
 In `.claude/agents/`. Invoke via the Agent tool when their specialty is the
 bottleneck; each does its own web research, so you needn't pre-load context.
 Findings land in `findings/`. Dispatch on subgoal type, not availability;
-launch independent subagents in parallel (one message, several Agent calls).
+launch independent subagents in parallel (one message, several Agent
+calls). For an adversarial **critic panel** or a parallel **research
+sweep**, `/solve` may fan a fleet out via the Workflow tool (see its
+SKILL.md § Workflow orchestration).
 
 Domain specialists (each carries its own technical detail — these glosses are
 just the dispatch signal): **`analyst`** (analytic number theory — circle

@@ -527,6 +527,9 @@ exact sequence:
    `#print axioms ThmName` output verbatim. Do NOT trust the
    sub-agent's report alone.
 5. Dispatch critic adversarially → writes findings/review-<topic>-DATE.md.
+   (High-stakes promotion — the `novel` tag, the main theorem, or a
+   result that appears to brush a published wall — runs the multi-lens
+   critic panel instead; see "Workflow orchestration", Pattern A.)
 6. If critic PASS: promote in proof.tex per the "Manuscript style"
    section below — update the `% [sketch]` LaTeX comment to
    `% [verified: formal/<DisplayName>/Foo.lean] [<novelty>]` (the
@@ -849,7 +852,10 @@ c. **Literature check.** *(Skip on T1 clones — the novelty gate
    suffices for settled material; a full survey on T1 is the 5.7h
    failure mode.)* If the subgoal is novel or it has been > a few
    sessions since this topic was last surveyed, dispatch `librarian`
-   to ground it in recent literature. The librarian reads existing
+   to ground it in recent literature. (For a broad T2/T3 survey, the
+   parallel **research sweep** — § Workflow orchestration, Pattern B —
+   fans the sources out and merges them, faster than the serial
+   single-librarian pass.) The librarian reads existing
    findings first (no re-surveying), runs a WebSearch sweep, saves the
    survey under `findings/lit-<topic>-<YYYY-MM-DD>.md`, and **refreshes
    `findings/research-state.md`** (the single consolidated known-vs-open
@@ -880,7 +886,9 @@ e. **Formalize / compute.** Two cases:
 f. **Review.** Dispatch `critic` to read the sketch + the `.lean`
    file. Address concerns concretely. If the review finds a fatal
    gap, downgrade the manuscript tag and document in
-   `findings/review-*.md`.
+   `findings/review-*.md`. For a high-stakes promotion (the `novel`
+   tag, the main theorem, or a wall-brusher), run the multi-lens
+   **critic panel** instead — § Workflow orchestration, Pattern A.
 
 g. **Promote.** If steps (e) and (f) succeed:
    - Change the manuscript tag from `[sketch]` to `[verified:
@@ -955,6 +963,125 @@ can't be derived from the repo, /solve picks the option most
 consistent with the existing precedent (read prior commits, prior
 findings, prior `proof.tex` style), records the choice in
 `findings/decision-<topic>-<date>.md`, and continues.
+
+# Workflow orchestration (optional power-tool for fan-out)
+
+The "dispatch N `Agent` calls in one message" model above is the
+default. For two recurring **fan-out** shapes the **`Workflow` tool** is
+a better fit: it runs a deterministic script that spawns a fleet of
+subagents, collects schema-validated returns, and (via `agentType`)
+reuses the existing agent definitions verbatim. The Workflow tool
+requires explicit opt-in; **these two patterns, invoked from this skill,
+are that opt-in.** Outside them, prefer plain `Agent` dispatch — do not
+reach for a Workflow for a single critic pass or a one-shot lookup, and
+respect the same cost discipline as the 30-min anti-stagnation cap (a
+panel is ~5 agents, a sweep ~6; don't fan out a trivial import wrapper).
+
+**The orchestrator stays the spine.** A Workflow returns *data*; /solve
+still owns everything that must stay legible and incremental:
+- the `→`/`←` narration lines — emit `→ [workflow:critic-panel] …` on
+  launch and `← [workflow:critic-panel] 5 lenses, 0 refutations` on
+  return (the `/workflows` view shows live per-agent progress; the turn
+  text still needs the two lines);
+- the independent `lake build` + `#print axioms` re-check (never trust
+  an agent's self-report — verify-cycle Rule 4);
+- writing the shared files (`proof.tex`, `findings/*`,
+  `research-state.md`), running `gh issue`, committing per work unit,
+  and rebuilding the PDF.
+
+Agents inside a Workflow obey the same "no shared-file writes, no `gh`"
+rule as any sub-agent (§ Parallelism, "Unsafe"). The skeletons below are
+*adapt-me* templates — persist via the Workflow tool's `scriptPath`,
+tweak the lens/angle text per problem.
+
+## Pattern A — adversarial critic panel (harden a high-stakes promotion)
+
+The default verify cycle runs **one** critic. For a **high-stakes
+promotion** — anything proposing the `novel` tag, the main theorem, or a
+result that appears to brush a published wall — fan `critic` out across
+its own heuristics (§ critic.md), **one lens per agent**, and let any
+credible refutation block the promotion. Five distinct lenses catch what
+five identical passes would miss.
+
+```js
+export const meta = {
+  name: 'critic-panel',
+  description: 'Adversarial multi-lens critic panel for one [verified] promotion candidate',
+  phases: [{ title: 'Refute' }],
+}
+// One lens per critic, drawn from critic.md's heuristic list:
+const LENSES = [
+  'Hidden dependence on a famous open hypothesis (RH/GRH/EH/GEH/Hardy–Littlewood, a density hypothesis, or any conjecture the ROADMAP lists as a TARGET) or the parity barrier — smuggled in via "standard estimates".',
+  'Stronger-than-target: does the argument as stated prove something strictly stronger than the target? If so it almost certainly has a bug — find the unstated assumption.',
+  'Prose elisions and arithmetic: expand every "WLOG"/"clearly"/"standard"; check uniformity in every parameter (N, modulus q, residue a); recompute the main term for sign / scale / off-by-one errors.',
+  'Lean acceptance gate: #print axioms lists ONLY propext / Classical.choice / Quot.sound (no sorryAx, no Lean.ofReduceBool, no project-local axiom); the Lean statement matches the manuscript claim; no [conditional]→[verified] laundering.',
+  'Novelty honesty: is the proposed `novel` tag real, or a known result / Mathlib cousin dressed up? Cross-check research-state.md + a quick loogle/leansearch.',
+]
+const VERDICT = { type: 'object', additionalProperties: false,
+  properties: { refuted: { type: 'boolean' }, reason: { type: 'string' } },
+  required: ['refuted', 'reason'] }
+// args = { claim: '<manuscript statement>', lean: '<.lean path + verbatim #print axioms output>' }
+const votes = await parallel(LENSES.map((lens, i) => () =>
+  agent(`You are critic. Review ONLY through this lens:\n${lens}\n\n`
+      + `Candidate: ${args.claim}\nLean: ${args.lean}\n\n`
+      + `Default to refuted=true if you cannot rule the failure out.`,
+    { agentType: 'critic', label: `critic:lens${i + 1}`, phase: 'Refute', schema: VERDICT })))
+const refutations = votes.filter(Boolean).filter(v => v.refuted)
+return { promote: refutations.length === 0, refutations }
+```
+
+On return: `promote === true` (zero refutations) → proceed with the
+promotion. Any refutation → read each `reason`, send it back to
+`formalist` (Lean defect) or downgrade the manuscript tag, and record
+the panel verdict in `findings/review-<topic>-<date>.md` exactly as a
+single-critic review would. The panel **replaces** verify-cycle step 5 /
+work-loop step (f) for high-stakes promotions; routine import wrappers
+keep the single pass.
+
+## Pattern B — parallel research sweep (speed up a librarian survey)
+
+The default literature check runs **one** librarian serially through all
+its sources. For a genuine survey (**T2/T3 only — never T1**), fan the
+search across independent angles in parallel, then a final librarian
+merges them into the one known-vs-open picture. Wall-clock drops to the
+slowest single angle instead of the sum.
+
+```js
+export const meta = {
+  name: 'research-sweep',
+  description: 'Parallel multi-angle literature sweep, merged into one research picture',
+  phases: [{ title: 'Sweep' }, { title: 'Synthesize' }],
+}
+const ANGLES = [
+  'Mathlib novelty gate: loogle (type-shaped) + leansearch (English). Already formalized? Record exact module paths.',
+  'arXiv, last 3–5 years, primary category: the SOTA bound + the 3 closest predecessors, with arXiv ids and theorem #s.',
+  'MathOverflow + Tao blog + Polymath + erdosproblems + AIM: known obstructions, folklore, partial results.',
+  'Google Scholar: most-cited landmarks and survey / expository articles on the target.',
+  'Reservoir + recent arXiv-with-Lean-source: existing partial formalizations to reuse (package + git URL + SHA).',
+]
+const HITS = { type: 'object', additionalProperties: false, required: ['hits'],
+  properties: { hits: { type: 'array', items: { type: 'object', additionalProperties: false,
+    required: ['ref', 'gives', 'doesnt'],
+    properties: { ref: { type: 'string' }, gives: { type: 'string' }, doesnt: { type: 'string' } } } } } }
+// args = { topic: '<subgoal in one sentence>' }
+const sweeps = await parallel(ANGLES.map((a, i) => () =>
+  agent(`You are librarian. Cover ONLY this angle:\n${a}\n\nTopic: ${args.topic}\n\n`
+      + `Return precise pointers (arXiv id / theorem # / Mathlib module path) with what each DOES and DOES NOT give.`,
+    { agentType: 'librarian', label: `sweep:angle${i + 1}`, phase: 'Sweep', schema: HITS })))
+const merged = await agent(
+  `You are librarian. Merge these per-angle findings into ONE known-vs-open picture: name the closest `
+  + `predecessor and the strengthening that would close the gap, propose 3 candidate attack vectors, and give a `
+  + `per-checkbox novelty hint (known-cited / formalization / candidate-novel).\n\n`
+  + JSON.stringify(sweeps.filter(Boolean)),
+  { agentType: 'librarian', phase: 'Synthesize' })
+return merged
+```
+
+On return: /solve writes `findings/lit-<topic>-<date>.md`, refreshes
+`findings/research-state.md` from `merged`, adds the `findings/INDEX.md`
+entry, cites `research-state.md` from the ROADMAP, and commits — the same
+artifacts the serial path produces, gathered faster. The sub-agents wrote
+nothing to disk; the orchestrator owns the files.
 
 # Work-unit definitions (any one of these = commit)
 
