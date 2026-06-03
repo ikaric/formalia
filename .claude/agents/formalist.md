@@ -26,6 +26,21 @@ lake --version
 needs `lake exe cache get` to fetch Mathlib's prebuilt `.olean` files
 (~3 GB, ~5 min); without the cache, the first build is ~45 minutes.
 
+**Build serially — `formal/.lake/` is a shared, unlocked resource.**
+Lake has **no** inter-process build lock (the `lake.lock` was removed in
+`lean4#2445` before v4.0.0 shipped), so two `lake build` invocations in
+the same directory race and corrupt each other's `.olean` files
+(`lean4#5084`). Never spawn a `lake build` in the background or run two
+at once; let each finish before the next. The orchestrator guarantees
+you exclusive build access (it won't dispatch a second build-running
+agent alongside you — see solve's SKILL.md § Parallelism), so within
+*your* turn you have the build dir to yourself — just don't parallelize
+builds yourself. For a quick **read-only** typecheck of a single file
+against the already-built tree, `lake env lean <File>.lean` elaborates in
+memory without writing `.lake/` or taking any lock (faster than a full
+`lake build` while iterating); the authoritative `#print axioms` /
+`[verified]` check still needs a real `lake build`.
+
 ### Imports
 
 **Default**: `import Mathlib` at the top of every concept file.

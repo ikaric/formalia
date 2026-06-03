@@ -952,10 +952,95 @@ two agents write to the same file:
 - Two agents both editing `STATUS.md`.
 - Two agents both writing to the same `.lean` file.
 - Two agents both running `gh issue …`.
+- **Two agents both running `lake build` / `lake exe cache get`** in
+  `formal/` — see "Lean builds don't parallelize" below. This is the
+  most easily-missed one: two `formalist` agents each iterating against
+  the compiler *look* independent (different `.lean` files) but share
+  the one `formal/.lake/` and will corrupt each other's build.
 
 After parallel agents return, /solve serially updates the shared
 files (`proof.tex`, `STATUS.md`, `findings/INDEX.md`), runs the
 appropriate `gh issue` commands, then commits and pushes.
+
+## Lean builds don't parallelize across processes — serialize them
+
+The single most important concurrency constraint, and a
+counter-intuitive one. **Lake (v4.30.0 / Lake 5.0.0) has no
+inter-process build lock.** A `lake.lock` build lock existed only in
+nightlies for 15 days in Aug 2023 — introduced by `lean4#2385`,
+disabled by `lean4#2445` before v4.0.0 ever shipped, and never
+re-enabled (`Lake/Util/Lock.lean` docstring: *"Lake does not currently
+use a lock file. Previously, Lake used one for builds, but this was
+removed in lean4#2445."*).
+
+The consequence is the **opposite** of "a lock makes builds wait":
+because there is **no** lock, two `lake build` invocations in the same
+`formal/.lake/` do not block, wait, or detect each other — they **race**
+on shared `.olean` write targets. `lean_save_module_data` writes a
+**fixed-name** temp file then renames it onto the `-o` target; when two
+processes build any overlapping module (and parallel agents always
+re-touch shared Mathlib/project modules), the second's rename fails with
+`ENOENT` and the build dies (`lean4#5084`, OPEN). Reproduced firsthand:
+two `lake build`s in one dir on a 12-core box, independent modules,
+crashed within 22 s with `failed to load header from
+….setup.json: offset 0: unexpected end of input` plus a cascade of
+`error: no such file or directory`. Even a build that *survives* the
+race may have read a half-written olean — its result is untrustworthy.
+A separate hazard (`lean4#13449`) is a stale `.lake` trace replaying
+green over a broken tree.
+
+Crucially, a **single** `lake build` is already internally multi-core:
+one supervisor spawns many `lean` workers (parallelism bounded by
+`LEAN_NUM_THREADS`, no `-j` flag). **Serializing whole builds wastes no
+cores** — the hazard is many lake *processes* in one dir, never one
+build using many threads. (Mathlib's own top-level target tops out near
+×18 effective parallelism, so one builder already saturates a big box.)
+
+**Three dispatch lanes** — the orchestrator picks per batch:
+
+1. **DEFAULT — fan out, serialize the build.** Dispatch as many
+   parallel agents as the work allows (librarian surveys, domain-agent
+   sketches, `computationalist` on `formal/numerics/`, `formalist`
+   agents *writing* their `.lean` files and doing read-only
+   `lake env lean` checks), but ensure **only one** agent runs the
+   actual `(cd formal && lake build)` at any moment. In practice: do not
+   put two build-running `formalist` agents (or a `formalist` + a
+   `critic` that builds out-of-tree checks, per `critic.md`) in the same
+   parallel batch — dispatch them in **separate sequential batches**, or
+   have the parallel formalists only write/`lake env lean`-check and let
+   /solve run **one** combined `lake build` afterward.
+2. **VERIFY-ONLY lane — `lake env lean File.lean`.** This elaborates a
+   single file in memory with the workspace `LEAN_PATH`, writes **no**
+   `.lake/` artifacts, builds **no** imports, and takes **no** lock — so
+   any number of agents may run it concurrently against an
+   already-built tree. It is a *checking* lane, not a *building* lane: it
+   confirms a file typechecks against existing oleans but does not
+   produce the olean that a `[verified]` artifact's `#print axioms` check
+   needs. (Distinct from `lake lean File.lean`, which **does** build
+   imports and write `.lake/` — not lock-free.)
+3. **ISOLATED-PARALLEL lane — git worktrees.** When genuinely concurrent
+   *builds* are wanted, give each build-running agent its own checkout /
+   git worktree (its own writable `.lake/build`). Share the read-only
+   built Mathlib via the "globally shared mathlib installation" pattern
+   (`require mathlib … path = "../mathlib"`, build once, `chmod -R u-w
+   .lake/build`) plus the shared content-addressed download cache at
+   `~/.cache/mathlib` (`MATHLIB_CACHE_DIR` / `XDG_CACHE_HOME`) so workers
+   don't each re-download the 3–5 GB. **Heavy** (each worktree still
+   unpacks its own oleans unless the read-only shared-install pattern is
+   used; one shared Mathlib pin couples version upgrades), so this is an
+   advanced opt-in — **the DEFAULT lane is correct for almost every
+   session.** Pre-install the toolchain and pre-build/`cache get` Mathlib
+   **once** before fanning out, to dodge the unrelated elan-install and
+   `cache get` races.
+
+Other concurrency facts worth knowing: olean *reads* are safe during a
+write (write-temp-then-atomic-rename, so a reader sees a complete old or
+new file, never a torn one); the editor LSP only reads oleans, never
+writes them; `elan` is lock-free for an already-installed toolchain but
+its install/unpack path is not (so pre-install once); and concurrent
+`lake exe cache get` was historically unsafe until mathlib retrofitted a
+lock (`mathlib4#6611`) — still, treat `cache get` as a serialized build
+op here.
 
 **Zero user input.** No agent — and not the /solve orchestrator —
 ever calls `AskUserQuestion`. If the team needs a decision that

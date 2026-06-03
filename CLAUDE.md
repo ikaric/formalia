@@ -259,6 +259,24 @@ Full step-by-step is in `.claude/skills/solve/SKILL.md`.
   `elan` puts `lean`/`lake` on `$PATH` (no per-shell activation). A fresh
   clone needs `lake exe cache get` to pull Mathlib's pre-built `.olean` files
   (~3 GB, ~5 min first time); subsequent builds are incremental.
+- **Lean builds don't parallelize across processes — serialize them.** Lake
+  (v4.30.0 / Lake 5.0.0) holds **no inter-process build lock**: the short-lived
+  `lake.lock` was disabled in `lean4#2445`, 15 days after it landed, before
+  v4.0.0 ever shipped (`Lake/Util/Lock.lean` docstring: *"Lake does not
+  currently use a lock file"*). So two `lake build` invocations in the same
+  `formal/.lake/` do **not** block or wait for each other — they **race** on
+  shared `.olean` write targets and corrupt or crash each other (`lean4#5084`:
+  a fixed-name temp file → `ENOENT` on rename; reproduced firsthand as `failed
+  to load header … offset 0: unexpected end of input` plus a cascade of
+  vanishing files). **At most one `lake build` / `lake exe cache get` runs at a
+  time across the whole clone** — treat `formal/.lake/` as a shared mutable
+  resource exactly like `proof.tex`. A *single* `lake build` is already
+  internally multi-core (parallelism bounded by `LEAN_NUM_THREADS`), so
+  serializing whole builds wastes no cores; the hazard is many lake *processes*
+  in one dir, never one build using many threads. The dispatch consequences —
+  which agents may run alongside a build, the read-only `lake env lean
+  File.lean` check lane, and git-worktree isolation for true concurrent builds
+  — are spelled out in `.claude/skills/solve/SKILL.md` § Parallelism.
 - **Import convention.** `import Mathlib` at the top of every concept file —
   the blanket import exposes the full corpus to `exact?` / `apply?` / `rw?` /
   `simp?` / `loogle` at negligible cache cost. Selective imports
@@ -329,9 +347,11 @@ In `.claude/agents/`. Invoke via the Agent tool when their specialty is the
 bottleneck; each does its own web research, so you needn't pre-load context.
 Findings land in `findings/`. Dispatch on subgoal type, not availability;
 launch independent subagents in parallel (one message, several Agent
-calls). For an adversarial **critic panel** or a parallel **research
-sweep**, `/solve` may fan a fleet out via the Workflow tool (see its
-SKILL.md § Workflow orchestration).
+calls) — but **never two that each run `lake build`**: Lean builds share the
+one `formal/.lake/` and must be serialized (see the Rules bullet above and
+§ Parallelism in solve's SKILL.md). For an adversarial **critic panel** or a
+parallel **research sweep**, `/solve` may fan a fleet out via the Workflow
+tool (see its SKILL.md § Workflow orchestration).
 
 Domain specialists (each carries its own technical detail — these glosses are
 just the dispatch signal): **`analyst`** (analytic number theory — circle

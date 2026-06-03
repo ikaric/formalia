@@ -23,8 +23,8 @@ Formalia is a GitHub template for attacking open mathematical problems with an L
 
 - **Lean kernel is the trust root** — every `[verified]` claim is checked by `lake build` plus `#print axioms` against the three Lean foundational axioms
 - **Mathlib reuse before reproof** — a mandatory novelty gate (loogle + leansearch) makes every subgoal start with "is this already formalized?"
-- **Twelve specialist agents** — analyst, sieve theorist, combinatorialist, geometer, algebraist, topologist, probabilist, complexity theorist, formalist, computationalist, librarian, critic
-- **Three slash-commands** — `/target` (bootstrap), `/solve` (autonomous loop), `/vector` (vector lifecycle)
+- **Twelve specialist agents** — analyst, sieve theorist, combinatorialist, geometer, algebraist, topologist, probabilist, complexity theorist, formalist, computationalist, librarian, critic — dispatched in parallel when independent, and fanned out into **agent fleets** (adversarial critic panels, parallel research sweeps) via the Workflow orchestrator
+- **Four slash-commands** — `/target` (bootstrap), `/solve` (autonomous loop), `/vector` (vector lifecycle), `/polish` (final manuscript pass)
 - **Honest tagging discipline** — every claim is `[verified]` / `[sketch]` / `[conditional]` / `[numerical]` / `[heuristic]`, and every verified result is further classified `novel` / `formalization` / `known-cited` so a reader can tell a genuine contribution from a re-proof of a known fact
 - **Scope calibration** — `/target` sets a scope tier (T1 known/textbook · T2 bounded-hard · T3 open) so a textbook problem finishes in minutes and is never over-formalized past what was asked
 - **Publication-quality manuscript** — `manuscript/proof.tex` reads like an arXiv preprint, with `proof.pdf` rebuilt by `tectonic` after every promotion (not just at session end), so the deliverable is readable early and keeps growing
@@ -190,6 +190,21 @@ flowchart TB
 
 > **Per-clone extensibility**: a clone that needs a missing specialist (e.g., `logician`, `category-theorist`, `algebraic-geometer`, `differential-geometer`) drops a new `<name>.md` into `.claude/agents/`. The orchestrator picks it up automatically.
 
+### Orchestration & parallelism
+
+`/solve` is the **spine**: it picks the subgoal, decides which specialists to wake, collects their results, runs the verify cycle, and owns every durable side-effect (commits, `gh issue`, the manuscript, the PDF). The agents never touch Issues or git themselves — they leave notes in `findings/` and report back. Independent agents run **concurrently**: a one-message batch of several `Agent` calls, each in its own context window, results gathered when they return.
+
+For two recurring fan-out shapes the harness escalates from "a few parallel agents" to a deterministic **agent fleet**, driven by a Workflow script that spawns the fleet, validates each return against a schema, and reuses the existing agent definitions verbatim:
+
+| Fleet | Shape | When |
+|---|---|---|
+| **Adversarial critic panel** | One `critic` per *lens* (hidden open-hypothesis dependence, stronger-than-target, WLOG/"clearly" expansion, sign/scale, parity barrier, …); **any** credible refutation blocks the promotion | A high-stakes promotion — the main theorem, a `novel` claim, or a result that brushes a published wall |
+| **Parallel research sweep** (research fleet) | Several `librarian`-class agents each search a *different angle* (Mathlib, arXiv, MathOverflow, Polymath, recent SOTA) at once, then one agent synthesizes the cross-checked findings | A broad literature survey that would be slow as one serial pass |
+
+Five distinct lenses (or angles) catch what five identical passes would miss; the orchestrator still re-runs the authoritative `lake build` + `#print axioms` check itself rather than trusting any agent's self-report.
+
+> **One build at a time.** Agents run in parallel, but **Lean builds are serialized**: Lake has no inter-process build lock (the `lake.lock` was removed before Lean 4.0.0 ever shipped), so two `lake build`s in the shared `formal/.lake/` would race and corrupt each other's `.olean` files rather than wait politely. A *single* `lake build` is already multi-core, so this costs nothing — the harness simply never dispatches two build-running agents at once. Parallel agents that only *write* `.lean` files, run read-only `lake env lean` checks, search the literature, or run numerics proceed concurrently; the actual `lake build` is funnelled through one builder. (Details in `.claude/skills/solve/SKILL.md` § Parallelism.)
+
 ---
 
 ## 🎛 The Skills
@@ -281,7 +296,7 @@ your-clone/
 │
 ├── manuscript/
 │   ├── proof.tex                      # Canonical evolving manuscript
-│   └── proof.pdf                      # Rendered PDF (committed; rebuilt each session)
+│   └── proof.pdf                      # Rendered PDF (committed; rebuilt per promotion + session end)
 │
 ├── formal/                            # Lake project root
 │   ├── lakefile.toml                  # Mathlib pin + library config
@@ -325,7 +340,11 @@ It writes `findings/deadend-<topic>-<date>.md` explaining the concrete obstacle,
 
 ### How does it avoid hallucinating proofs?
 
-The Lean kernel is the trust root. `/solve` independently re-runs `lake build` and `#print axioms` rather than trusting the sub-agent's report. The critic agent reviews adversarially before any `[verified]` promotion. Honest tagging (`[sketch]` / `[conditional]` / `[numerical]` / `[heuristic]`) is mandatory for anything that doesn't clear the axiom gate.
+The Lean kernel is the trust root. `/solve` independently re-runs `lake build` and `#print axioms` rather than trusting the sub-agent's report. The critic agent reviews adversarially before any `[verified]` promotion — for high-stakes promotions, an entire **critic panel** (one critic per failure-mode lens) must clear it. Honest tagging (`[sketch]` / `[conditional]` / `[numerical]` / `[heuristic]`) is mandatory for anything that doesn't clear the axiom gate.
+
+### Do the agents really run in parallel?
+
+Yes — independent specialists run concurrently (and broad surveys / high-stakes reviews fan out into research-sweep and critic-panel **fleets**; see [Orchestration & parallelism](#orchestration--parallelism)). The one thing that is *not* parallelized is the Lean build: Lake has no inter-process build lock, so two `lake build`s in the shared `formal/.lake/` would race and corrupt each other rather than queue. Since a single `lake build` is already multi-core, the harness funnels all builds through one builder at a time and loses nothing — everything else (writing `.lean` files, read-only `lake env lean` checks, literature search, numerics) still runs concurrently around it.
 
 ### Can I edit the manuscript myself?
 
