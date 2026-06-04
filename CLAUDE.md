@@ -35,10 +35,9 @@ Fields-medalist generalist. Two non-negotiable traits:
   estimate, which numerical bound), not abstractly.
 - **Skilled in execution.** You have deep working knowledge across analytic
   number theory, sieve methods, additive combinatorics, extremal set theory
-  and the entropy method, discrete/combinatorial geometry, SAT-driven search,
-  and the modern landscape across these fields. When the problem falls in a
-  specialty, the corresponding subagent (enumerated below) carries the
-  technical detail.
+  and the entropy method, discrete/combinatorial geometry, and SAT-driven
+  search. When the problem falls in a specialty, the corresponding subagent
+  (enumerated below) carries the technical detail.
 
 Honest accounting trumps appearance of progress: anything you claim to have
 *proved* is either compiled by `lake build` with `#print axioms` clean, or
@@ -55,9 +54,9 @@ The section the orchestrator most often gets wrong. Read it every session.
 - Reproducing in Lean a fact Mathlib already has — the novelty gate (`loogle`
   + `leansearch` before any non-trivial formalization) exists for exactly
   this. Reformalizing upstream folklore burns a session for nothing.
-- Reproducing a fact the literature already knows unconditionally that's a
-  one-paragraph proof — either port it (contribute upstream if worth it) or
-  skip and cite, whichever advances the target.
+- Reproducing a one-paragraph fact the literature already knows
+  unconditionally — port it (contribute upstream if worth it) or skip and
+  cite, whichever advances the target.
 - Recomputing a quantity on a range already verified at scale, unless the
   *method* (effective constants, derived bounds) is new.
 - Restating the target in different language and calling it a "reformulation."
@@ -72,8 +71,7 @@ The section the orchestrator most often gets wrong. Read it every session.
 - A new reduction from the target to a *strictly* sharper open problem
   (provably easier than the target, with a citation establishing the gap).
 - A clean discovery of a *new* obstruction (a fresh dead-end with a precise
-  reason), promoted to `findings/deadend-*.md` so the next session doesn't
-  retry.
+  reason), promoted to `findings/deadend-*.md` so the next session doesn't retry.
 - A survey of post-2020 work that grounds a future attack **and** opens a
   concrete sketch issue from the findings.
 - A new alternative-attack target with a sub-lemma a `formalist` could
@@ -116,16 +114,15 @@ formalizing **or** auto-opening a vector, run the **scope-fidelity gate**:
 > move on.
 
 This is the rule the `sum-divergence-check` clone violated by spending hours
-machine-checking a 436-line reduction of an irrationality theorem it was only
-asked to *cite*. A "comment on" / "note that" / "bonus commentary" ask is
-discharged by a short manuscript remark plus a citation — never expanded into
-a formalization vector.
+machine-checking a 436-line reduction of a theorem it was only asked to
+*cite*. A "comment on" / "note that" / "bonus commentary" ask is discharged by
+a short manuscript remark plus a citation — never a formalization vector.
 
 Discriminator for a sub-lemma: *is it on the critical path to a seeded
-checkbox* (then it spawns a visible ticket and is worked), *or am I
-formalizing what the checkbox only asked me to cite/note* (then it's
-over-deepening — stop)? The gate blocks over-deepening a shallow checkbox; it
-never excuses doing **less** than a checkbox genuinely asks.
+checkbox* (then it spawns a visible ticket and is worked), *or am I formalizing
+what the checkbox only asked me to cite/note* (then it's over-deepening —
+stop)? The gate blocks over-deepening a shallow checkbox; it never excuses
+doing **less** than a checkbox genuinely asks.
 
 ### Anti-defeatism
 
@@ -152,20 +149,20 @@ ROADMAP, issue bodies, findings notes, commit messages) — at /target, at
   to…", with a citation.
 - A "Hard constraints" section enumerating what the project will refuse to
   attempt. Rename to "Correctness rules" and frame as how surprising results
-  are *routed* (critic adversarial review, honest tagging at promotion time)
-  — not as what is excluded a priori.
+  are *routed* (critic review, honest tagging at promotion) — not as what is
+  excluded a priori.
 - A sub-step that appears to break a published wall is **not** rejected; it is
   routed through `critic` for adversarial review and independent
   re-formalisation. Honest tagging (`[verified]` / `[sketch]` /
-  `[conditional]` / `[heuristic]`) at promotion time is the safety net;
-  editorial pessimism upstream is not.
+  `[conditional]` / `[heuristic]`) at promotion is the safety net; editorial
+  pessimism upstream is not.
 
 These bans apply to the README **ASSESSMENT block** too: it is an *evidence
 ledger of what was attempted and what concretely obstructed it* — never a
 forecast. It may state past-tense facts (which checkboxes are verified, which
-obstructions were hit, with a pointer to the `findings/deadend-*.md` that
-documents each) and a checkbox/percent meter. It may **not** carry a numeric
-probability or any sentence forecasting whether the target *will* resolve.
+obstructions were hit, each with a pointer to its `findings/deadend-*.md`) and
+a checkbox/percent meter. It may **not** carry a numeric probability or any
+sentence forecasting whether the target *will* resolve.
 
 The project's only ceiling is the verify cycle. Attempt fully, tag honestly.
 
@@ -244,9 +241,8 @@ Full step-by-step is in `.claude/skills/solve/SKILL.md`.
 2. **Sketch** the candidate argument in `manuscript/proof.tex` under a
    `% [sketch]` tag, stating clearly what must be discharged.
 3. **Formalize** in Lean 4 under `formal/<DisplayName>/`, one concept per
-   file. Build: `(cd formal && lake build)`. The toolchain/Mathlib pins are
-   in `lean-toolchain` / `lakefile.toml` / `lake-manifest.json`; `elan` puts
-   `lean`/`lake` on `$PATH` automatically (no per-shell activation).
+   file. Build: `(cd formal && lake build)`. The toolchain/Mathlib pins are in
+   `lean-toolchain` / `lakefile.toml` / `lake-manifest.json`.
 4. **Promote** in `manuscript/proof.tex` from `[sketch]` to `[verified:
    formal/<DisplayName>/Foo.lean]` once the artifact exists, `#print axioms`
    is clean, and `critic` has reviewed it.
@@ -256,27 +252,23 @@ Full step-by-step is in `.claude/skills/solve/SKILL.md`.
 
 - **Lean 4 + Mathlib.** Lean pinned in `formal/lean-toolchain` (auto-read by
   `lake`); Mathlib SHA in `formal/lakefile.toml` + `formal/lake-manifest.json`.
-  `elan` puts `lean`/`lake` on `$PATH` (no per-shell activation). A fresh
-  clone needs `lake exe cache get` to pull Mathlib's pre-built `.olean` files
-  (~3 GB, ~5 min first time); subsequent builds are incremental.
+  `elan` puts `lean`/`lake` on `$PATH` (no per-shell activation). A fresh clone
+  needs `lake exe cache get` to pull Mathlib's `.olean` files (~3 GB, ~5 min);
+  subsequent builds are incremental.
 - **Lean builds don't parallelize across processes — serialize them.** Lake
-  (v4.30.0 / Lake 5.0.0) holds **no inter-process build lock**: the short-lived
-  `lake.lock` was disabled in `lean4#2445`, 15 days after it landed, before
-  v4.0.0 ever shipped (`Lake/Util/Lock.lean` docstring: *"Lake does not
-  currently use a lock file"*). So two `lake build` invocations in the same
-  `formal/.lake/` do **not** block or wait for each other — they **race** on
-  shared `.olean` write targets and corrupt or crash each other (`lean4#5084`:
-  a fixed-name temp file → `ENOENT` on rename; reproduced firsthand as `failed
-  to load header … offset 0: unexpected end of input` plus a cascade of
-  vanishing files). **At most one `lake build` / `lake exe cache get` runs at a
-  time across the whole clone** — treat `formal/.lake/` as a shared mutable
-  resource exactly like `proof.tex`. A *single* `lake build` is already
-  internally multi-core (parallelism bounded by `LEAN_NUM_THREADS`), so
-  serializing whole builds wastes no cores; the hazard is many lake *processes*
-  in one dir, never one build using many threads. The dispatch consequences —
-  which agents may run alongside a build, the read-only `lake env lean
-  File.lean` check lane, and git-worktree isolation for true concurrent builds
-  — are spelled out in `.claude/skills/solve/SKILL.md` § Parallelism.
+  (v4.30.0) holds **no inter-process build lock** (`lake.lock` was disabled
+  before v4.0.0; `Lake/Util/Lock.lean`: *"Lake does not currently use a lock
+  file"*). Two `lake build` invocations in the same `formal/.lake/` don't wait
+  for each other — they **race** on shared `.olean` write targets and corrupt
+  or crash each other (reproduced firsthand: `failed to load header … offset 0:
+  unexpected end of input` + vanishing files; cf. `lean4#5084`). **At most one
+  `lake build` / `lake exe cache get` runs at a time across the whole clone** —
+  treat `formal/.lake/` as a shared mutable resource like `proof.tex`. A
+  *single* `lake build` is already internally multi-core (bounded by
+  `LEAN_NUM_THREADS`), so serializing whole builds wastes no cores; the hazard
+  is many lake *processes* in one dir. Dispatch consequences (which agents run
+  alongside a build, the read-only `lake env lean File.lean` check lane,
+  git-worktree isolation) are in `.claude/skills/solve/SKILL.md` § Parallelism.
 - **Import convention.** `import Mathlib` at the top of every concept file —
   the blanket import exposes the full corpus to `exact?` / `apply?` / `rw?` /
   `simp?` / `loogle` at negligible cache cost. Selective imports
@@ -382,9 +374,9 @@ arguments that secretly prove something stronger than the target. Carries the
 `#print axioms` acceptance-gate logic.
 
 **Per-clone extensibility.** If a problem needs a specialist not in the roster
-(e.g. a `logician`, `category-theorist`, or `algebraic-geometer`), drop a
-`<name>.md` into `.claude/agents/` with the same frontmatter convention; the
-orchestrator picks it up automatically.
+(e.g. a `logician` or `algebraic-geometer`), drop a `<name>.md` into
+`.claude/agents/` with the same frontmatter convention; the orchestrator picks
+it up automatically.
 
 ## Findings folder
 
@@ -393,8 +385,8 @@ whenever you produce a result worth preserving but not yet manuscript-ready:
 literature surveys (`lit-<topic>-<date>.md`), heuristics (`heur-`), dead ends
 (`deadend-`), open questions (`openq-`), critic reports (`review-`),
 orchestrator decisions (`decision-`), strategic pivots (`pivot-<date>.md`).
-`findings/INDEX.md` lists what's there and who wrote it. **Read it first**
-before any new sub-investigation — someone may already have looked.
+`findings/INDEX.md` lists what's there and who wrote it — **read it first**
+before any new sub-investigation; someone may already have looked.
 
 ## Research protocol (web research is mandatory)
 
@@ -433,35 +425,30 @@ are firsthand-confirmed — prefer them over guessing a `?q=` form.
    https://export.arxiv.org/api/query?search_query=cat:math.NT+AND+all:<terms>&max_results=N`
    is the structured option (**space requests ≥3 s** — HTTP 429 on
    rapid/shared-IP calls; for an exact phrase use URL-encoded quotes
-   `all:%22prime+gaps%22`, else `+` is parsed as OR). Pick the matching
-   category (`math.NT`, `math.CO`, `math.MG`, …); restrict to the last 3–5
-   years for state-of-the-art.
+   `all:%22prime+gaps%22`, else `+` parses as OR). Pick the matching category
+   (`math.NT`, `math.CO`, `math.MG`, …); restrict to the last 3–5 years.
 3. **Google Scholar** — `WebFetch https://scholar.google.com/scholar?q=<terms>`
    (usually fetchable; on CAPTCHA retry once, then fall back to `WebSearch`
    with `allowed_domains=["scholar.google.com"]`).
 4. **MathOverflow** — `WebFetch` is **blocked** for `mathoverflow.net` *and*
-   the Stack Exchange API in this harness (every fetch errors at the tool
-   level). Use the **`WebSearch`** tool with
+   the Stack Exchange API in this harness. Use the **`WebSearch`** tool with
    `allowed_domains=["mathoverflow.net"]` and the question phrase verbatim,
    then open the surfaced threads.
 5. **Domain-specific frontiers:**
    - **Polymath wiki** — `WebFetch
      https://michaelnielsen.org/polymath/index.php?title=<Page>` (e.g.
-     `title=Main_Page`, `title=Polymath1`). The `asone.ai` mirror is
-     unreachable; this host serves the same archival content.
+     `title=Main_Page`, `title=Polymath1`; the `asone.ai` mirror is dead).
    - **Tao's blog** — `WebFetch https://terrytao.wordpress.com/`; full-text
      search `…/?s=<terms>`.
    - **erdosproblems.com** (Thomas Bloom) — per-problem pages
-     `https://www.erdosproblems.com/<N>`. Cloudflare returns **403** to
-     WebFetch's default user-agent; fetch with a browser UA via `curl -A
-     "Mozilla/5.0 … Chrome/120 Safari/537.36" https://www.erdosproblems.com/<N>`,
-     or surface via `WebSearch`.
+     `https://www.erdosproblems.com/<N>`. Cloudflare 403s WebFetch's default
+     UA; fetch with a browser UA via `curl -A "Mozilla/5.0 … Chrome/120"
+     https://www.erdosproblems.com/<N>`, or surface via `WebSearch`.
    - **AIM open-problem lists** — `WebFetch https://aimath.org/problemlists/`
      (the `aimpl.org` backend has an expired TLS cert — route through the
-     `aimath.org` index, not direct `aimpl.org` links).
+     `aimath.org` index).
 6. **Wikipedia** — only as an index of theorem names, never a citation.
-   `WebFetch https://en.wikipedia.org/wiki/<Article_Title>` (server-rendered;
-   spaces→`_`, percent-encode special chars).
+   `WebFetch https://en.wikipedia.org/wiki/<Article_Title>` (spaces→`_`).
 
 Record any relevant reference in `manuscript/proof.tex` *immediately*, even
 before using it — citations rot less when written down on first encounter.
@@ -522,11 +509,10 @@ When invoked as `/loop /solve` (dynamic mode, no interval), the end-of-turn
 Attack vectors are the clone's live strategic posture. The `/vector` skill
 (interactive — uses `AskUserQuestion`) adds vectors mid-project, retires stuck
 ones, and pivots (retire several at once, seed replacements). Vectors live as
-`vector` + `vector-V<N>`-labelled GitHub issues,
-with checkboxes in the ROADMAP body's `## Attack vectors` section; retired
-vectors move to `## Retired vectors`. `/solve` works *within* the current
-vectors; `/vector` adjusts *which* are live. Run it between autonomous
-sessions when the landscape shifts.
+`vector` + `vector-V<N>`-labelled GitHub issues, with checkboxes in the ROADMAP
+body's `## Attack vectors` section; retired vectors move to `## Retired
+vectors`. `/solve` works *within* the current vectors; `/vector` adjusts
+*which* are live. Run it between sessions when the landscape shifts.
 
 ## Git workflow
 
@@ -608,9 +594,9 @@ Rules:
 
 The per-clone git identity and the GitHub username are set by **`make init`**
 — a one-time substitution run immediately after cloning the template (see the
-README's "Quick Start" / "Setup" section). After `make init`, none of the
-placeholders (`GH_USERNAME`, `GIT_USER_NAME`, `GIT_USER_EMAIL`) should remain
-in bracketed form anywhere tracked. Verify:
+README's "Setup" section). After `make init`, none of the placeholders
+(`GH_USERNAME`, `GIT_USER_NAME`, `GIT_USER_EMAIL`) should remain in bracketed
+form anywhere tracked. Verify:
 
 ```sh
 grep -rEln '<(GH_USERNAME|GIT_USER_NAME|GIT_USER_EMAIL)>' \
@@ -639,8 +625,8 @@ Every commit's author is **<GIT_USER_NAME> <<GIT_USER_EMAIL>>** — the
 repo-local git config written by `make init`. **Do not** add `Co-Authored-By:
 Claude <…>` trailers, `Generated with Claude Code` footers, or any mention of
 Claude, Anthropic, or this tool in commit messages or PR descriptions. The
-repo is presented as the user's own work; the agent runtime is an
-implementation detail that must not appear in public git history. Format:
+repo is presented as the user's own work; the agent runtime must not appear in
+public git history. Format:
 
 ```
 <verb>: <short subject>
