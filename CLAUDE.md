@@ -12,7 +12,8 @@ If `manuscript/proof.tex` still contains the `FORMALIA_TEMPLATE` marker,
 this clone is uninitialised: **run the `/target` skill first.** It defines
 the target, renames the Lake project to the per-clone identifier, seeds the
 manuscript, and opens the ROADMAP issue with a seeded sub-goal task-list (and
-optionally attack-vector issues). After `/target`, run `/loop /solve`.
+optionally attack-vector issues). After `/target`, run `/solve` (it is
+self-looping — see "`/solve` loop pacing" below).
 
 The deliverable is a **compiled Lean 4 proof against Mathlib**; everything
 else is scaffolding. A claim becomes `[verified]` only when a corresponding
@@ -175,10 +176,11 @@ The harness's job is to close that list, **not** to invent more items once it
 is complete.
 
 - **`/solve` halts at `N/N closed`.** When every checkbox in the ROADMAP body
-  is ticked, `/loop /solve` must stop — emit a halt message and skip
-  `ScheduleWakeup` rather than scheduling the next iteration. Detection runs
-  at three points (session start, every pick-subgoal step, session end), all
-  in `.claude/skills/solve/SKILL.md`. **Halting closes the loop, not the
+  is ticked, the loop must stop — emit a halt message and skip the end-of-turn
+  scheduler (no `ScheduleWakeup`/`CronCreate`) rather than scheduling the next
+  iteration. Detection runs at three points (session start, every pick-subgoal
+  step, session end), all in `.claude/skills/solve/SKILL.md`. **Halting closes
+  the loop, not the
   ROADMAP issue** — the ROADMAP is *never* auto-closed; only the user closes
   it (their signal to take over with `/vector`). The user resumes via
   `/vector add`, which appends a fresh checkbox and re-arms the loop.
@@ -378,6 +380,19 @@ arguments that secretly prove something stronger than the target. Carries the
 `.claude/agents/` with the same frontmatter convention; the orchestrator picks
 it up automatically.
 
+**Model tier — subagents inherit the session model.** A subagent with no
+`model:` in its frontmatter (all 12 roster agents) runs at the **session's**
+model tier, so an Opus-4.8 / ultracode session runs its whole team — domain
+agents, `formalist`, `critic` panels, `librarian` sweeps — on Opus. Keep it
+that way: **never add a `model:` line to an agent's frontmatter to *downgrade*
+it, and never pass a smaller `model:` to the `Agent`/`Workflow` tools.** Pass an
+explicit `model` (or set `CLAUDE_CODE_SUBAGENT_MODEL`) *only* to override a
+built-in `agentType` that hardcodes a smaller model — notably `Explore`, which
+pins Haiku and ignores the session tier — and only to match (not undercut) the
+session. No global `CLAUDE_CODE_SUBAGENT_MODEL` is set by default (it would pin
+one model and break when the session tier changes); the inherit-by-default
+behavior already does the right thing.
+
 ## Findings folder
 
 `findings/` is shared workspace for inter-agent notes — drop a markdown note
@@ -486,23 +501,36 @@ In autonomous mode, **never call `AskUserQuestion`** — make the most
 reasonable decision from repo precedent and record it in
 `findings/decision-*.md`.
 
-### `/loop /solve` pacing (load-bearing)
+### `/solve` loop pacing (load-bearing)
 
-When invoked as `/loop /solve` (dynamic mode, no interval), the end-of-turn
-`ScheduleWakeup` policy is:
+`/solve` is self-looping — no `/loop` wrapper. Bare `/solve` runs back-to-back
+with a **60 s** gap (the harness minimum — never a longer idle delay; the user
+rejected idle pacing). Optional args: `every <dur>` (post-completion gap),
+`n=<int>` (max iterations, default unlimited), `once` (single pass),
+`pause`/`resume`. The full arg grammar and the end-of-turn **scheduler decision
+tree** (P0 pause → P1 target-reached → P2 exhaustion → P3 count → P4 usage-limit
+→ P5 normal reschedule) live in `.claude/skills/solve/SKILL.md` § "Loop
+control". Key policies:
 
-- **Default:** `delaySeconds: 60` (the harness minimum). Never use a longer
-  idle delay (1200s/1800s) — the user explicitly rejected idle pacing;
-  sessions run back-to-back with the smallest legal gap.
-- **Usage-limit case:** on a rate-limit / usage-cap error
-  (`rate_limit_exceeded`, `usage limit`, 429/529), parse the reset time and
-  set `delaySeconds = reset_time − now + 60s` margin, clamped to 3600s (the
-  harness max). Don't burn 60s retries against a limit.
-- **Target-reached case:** if the just-finished turn (or the session-start
-  check) found the ROADMAP at `N/N closed`, **do not call `ScheduleWakeup`**
-  — the loop terminates (the anti-overreach contract). The halt message tells
-  the user how to resume: `/vector add` opens a new vector and re-arms the
-  loop; `/polish` runs the final-pass manuscript polish on what's verified.
+- **Reschedule mechanism.** Gaps ≤ 1 h use `ScheduleWakeup` (clamped
+  [60, 3600] s); gaps > 1 h and far-future usage-reset resumes use a one-time
+  `durable` `CronCreate` (runs locally, up to ~7 days out — cloud Routines are
+  out, they have no local repo). A bare 60 s loop is **within-session** (dies
+  when Claude quits); durable cron survives a restart. State is never lost
+  (git + Issues), so "resume after a restart" is always just re-running `/solve`.
+- **Usage-limit case.** On a rate-limit / usage-cap error (`rate_limit_exceeded`,
+  `usage limit`, 429/529), parse the reset time and reschedule to
+  `reset + ~3 min`: `ScheduleWakeup` if ≤ 1 h out, else a durable one-time
+  `CronCreate` at the reset — so a weekly/monthly cap auto-continues without
+  hourly wake-burn. Issue the reschedule as the *first* post-limit action and
+  read **no** math state on that turn (no parseable quota API exists, so this is
+  reactive — keep usage metrics out of the math context). Don't decrement `n`
+  (the interrupted iteration didn't complete).
+- **Halt cases (target-reached / exhaustion / count / pause).** Any of these
+  stops the loop: skip the scheduler entirely (no `ScheduleWakeup`/`CronCreate`)
+  — the anti-overreach contract. The halt message tells the user how to resume:
+  `/vector add` re-arms after `N/N`; `/polish` polishes what's verified;
+  `/solve resume` clears a pause.
 
 ## Vector management (`/vector` skill)
 

@@ -16,8 +16,8 @@ make init
 
 # In Claude Code:
 /target
-# Then:
-/loop /solve
+# Then (self-looping; bare = back-to-back, or /solve every 30m, n=5, once):
+/solve
 ```
 
 `/target` overwrites this file with the per-clone initial state.

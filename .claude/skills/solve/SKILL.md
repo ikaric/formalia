@@ -1,6 +1,6 @@
 ---
 name: solve
-description: Resume autonomous work on this formalia clone. Loads the last checkpoint (the ROADMAP issue + open GitHub issues + git history + findings/INDEX.md + manuscript/proof.tex), picks the next subgoal, dispatches subagents, and commits + pushes results incrementally to origin/main. Designed for unattended multi-hour sessions; never asks the user questions. Invoked the same way each day; the project state lives in git and in GitHub Issues, not in conversation history.
+description: Resume autonomous work on this formalia clone. Loads the last checkpoint (the ROADMAP issue + open GitHub issues + git history + findings/INDEX.md + manuscript/proof.tex), picks the next subgoal, dispatches subagents, and commits + pushes results incrementally to origin/main. Self-looping — needs no /loop wrapper; bare `/solve` runs back-to-back, optional args tune cadence (`every 30m`), iteration count (`n=5`), one-shot (`once`), and pause/resume. Designed for unattended multi-hour sessions; never asks the user questions. Invoked the same way each day; the project state lives in git and in GitHub Issues, not in conversation history.
 ---
 
 You are starting (or resuming) an autonomous work session on this
@@ -17,6 +17,163 @@ If `manuscript/proof.tex` still contains the literal token
 immediately and tell the user to run `/target` first.** Do not
 attempt to invent a problem or pick one yourself; the problem
 definition is a deliberate user-driven step.
+
+# Loop control (args, pause, scheduling)
+
+`/solve` is **self-looping** — it needs no `/loop` wrapper. Invoked bare it
+runs one session, then schedules the next itself. Optional args tune the
+loop; all are optional and order-independent.
+
+## Args
+
+| Invocation | Effect |
+|---|---|
+| `/solve` | Loop, **60 s** gap between iterations, **unlimited** passes (default). |
+| `/solve once` | Single session, no reschedule (sugar for `n=1`). |
+| `/solve every <dur>` | After each iteration *completes*, wait `<dur>` before the next (a post-completion gap, not a wall-clock cron). |
+| `/solve n=<int>` | At most `<int>` *completed* iterations, then halt. Default unlimited. |
+| `/solve every 2h n=10` | Combine cadence + count. |
+| `/solve pause` | Write the pause sentinel and halt the loop cleanly (no work this turn). |
+| `/solve resume` | Clear the sentinel and continue (plain `/solve` also clears it). |
+
+`<dur>` is `<int>` + `s`/`m`/`h`/`d` (`90s`, `30m`, `2h`, `1d`).
+`once`/`pause`/`resume` are mutually exclusive (if combined, honor
+`pause > resume > once` and warn). Unknown tokens: ignore + a one-line
+warning — never block on arg noise.
+
+**State survives a wakeup only via the fired `prompt` string** (a wakeup
+re-enters the skill fresh — no in-memory carry-over). So re-encode the
+surviving config into the next prompt: carry the cadence **verbatim**
+(`every 30m` stays `every 30m`; never re-derive from seconds) and the count
+**decremented**. Decrement rule, applied only when an iteration *completes*:
+
+- unlimited (`n` absent) → next prompt omits `n=`;
+- else `nextN = n − 1`; if `nextN ≤ 0` → **halt** (count exhausted, no
+  reschedule); else next prompt is `/solve`(+` every <dur>`)(+` n=<nextN>`).
+
+So `/solve every 30m n=3` runs exactly three completed iterations 30 min
+apart, then halts; `n=1` and `once` both run exactly once.
+
+## Pause sentinel
+
+Path: **`.claude/local/solve-paused`** (already gitignored —
+`.gitignore` covers `.claude/local/`). `mkdir -p .claude/local` before
+writing (the one allowed runtime mkdir; gitignored space only). Presence is
+the signal; content is one line `paused <ISO8601>` for the user's benefit.
+**Gitignored, never committed** — it is per-machine loop-control state, not
+project state; committing would propagate one machine's pause to every clone
+and clutter the math history (project state lives in git + Issues; pause does
+not).
+
+Check the sentinel at the **same three points** as the target-reached check:
+session start (Step −1, below), each work-loop pick-subgoal step, and
+end-of-turn — so a paused loop never starts work, a long iteration can bail
+early, and a pause that lands mid-run is still honored at turn end.
+
+**Interrupting is always safe even without pause.** Every work unit commits +
+pushes, so pressing Esc / closing the laptop loses at most the current
+in-flight subagent's uncommitted scratch; the resume protocol picks up from
+the last commit. The sentinel is the *clean* "finish this iteration, then
+stop" affordance layered on top of that.
+
+## Session-start Step −1 (before Resume Protocol Step 0)
+
+Parse args → loop config, then dispatch on mode **before any I/O or the
+target-reached check**:
+
+- `pause` → `mkdir -p .claude/local`, write the sentinel, run the
+  stale-schedule sweep (below), emit one line ("Paused — sentinel written;
+  the loop will not reschedule. Run `/solve resume` to continue."), **end the
+  turn**. Read no math state.
+- `resume` (or a bare `/solve` issued *by the user* while the sentinel
+  exists) → `rm -f` the sentinel, run the stale-schedule sweep, fall through
+  to Step 0 and work normally.
+- a *fired wakeup/cron* arriving while the sentinel still exists →
+  authoritative halt: no work, no reschedule, end the turn. (Only a user
+  `resume`/`/solve` clears the sentinel.)
+- otherwise → proceed to Step 0.
+
+## End-of-turn scheduler (run after session-end commits are pushed)
+
+One ordered tree; **first match wins, stop evaluating.** This is the single
+place the loop decides to halt or reschedule — the halt branches of Rule 10
+and Session-end Step 6 *are* P0–P3 here, not a second copy.
+
+1. **P0 — pause sentinel present?** Pause-halt message; **no** reschedule; end.
+2. **P1 — target reached** (ROADMAP `N/N`, `N>0`)? Emit the `N/N` halt
+   message (issue # + `closed/total`), suggest `/polish`; **no** reschedule;
+   end.
+3. **P2 — exhaustion** (open queue empty post-sweep *and* no scope-advancing
+   vector can be auto-opened)? Write `findings/decision-exhausted-<date>.md`,
+   emit the exhaustion halt message, suggest `/vector`; **no** reschedule; end.
+4. **P3 — iteration count exhausted** (`nextN ≤ 0` from the decrement rule)?
+   Emit "Ran `<n>` of `<n>` iterations — halting; run `/solve` to start a new
+   loop."; **no** reschedule; end.
+5. **P4 — usage limit hit this turn** (`rate_limit_exceeded` / `usage limit`
+   / 429 / 529)? Parse the reset time from the error; `wait = reset − now +
+   180` (≈3 min margin).
+   - `wait ≤ 3600` → `ScheduleWakeup(clamp(wait,60,3600), prompt=<carried
+     config — n NOT decremented>, reason="usage-limit reset")`.
+   - `wait > 3600` → `CronCreate` a **one-time** local run at `reset+180s`
+     (`recurring:false`, `durable:true`, same carried prompt). If that call
+     can't fire post-limit → fall back to `ScheduleWakeup(3600, …, "hourly
+     re-arm")`, which re-checks the clock each hour and arms the precise
+     wakeup once within 1 h of reset.
+   - **Do not decrement `n`** — the iteration was interrupted, not completed.
+     Emit one line ("Usage limit hit; rescheduled for `<reset+margin>`."); end.
+     (See minimal-context discipline below.)
+6. **P5 — normal reschedule** (iteration completed, loop continues): compute
+   `nextN` (decrement rule); `nextPrompt = /solve`(+cadence)(+` n=<nextN>`).
+   - `gap ≤ 3600` → `ScheduleWakeup(clamp(gap,60,3600), nextPrompt, "solve
+     loop: next iteration")`.
+   - `gap > 3600` (e.g. `every 2h`) → `CronCreate` one-time at `now+gap`
+     (`recurring:false`, `durable:true`, `nextPrompt`).
+   - Emit the normal end-of-session report (Session-end Step 7) + "next
+     iteration in `<gap>`"; end.
+
+Ordering: pause beats the project halts (a user who paused wants out *now*);
+usage-limit sits below the halts (a halted loop must not re-arm) but above
+normal cadence; count above usage-limit so `once`/`n=1` never re-arm even if
+they brushed a limit.
+
+## Scheduling mechanics & honest limits
+
+- **`ScheduleWakeup`** is the primary mechanism (it *is* what dynamic looping
+  uses), valid for gaps ≤ 1 h. **`CronCreate`** (deferred — fetch via
+  `ToolSearch select:CronCreate`) handles gaps > 1 h and far-future
+  usage-reset resumes, as a **one-time** (`recurring:false`), **`durable:true`**
+  local job (up to ~7 days out, runs on this machine — cloud Routines are out,
+  they lack the local repo + Lean toolchain).
+- **Within-session vs durable.** A bare `/solve` 60 s `ScheduleWakeup` loop
+  runs **only while Claude is open** — it does *not* survive quitting Claude or
+  the laptop sleeping past the timer. Only `durable:true` cron (the
+  `every >1h` / usage-reset path) survives a restart, and even that needs the
+  machine awake. State is never lost (git + Issues); "resume after a restart"
+  is always just re-running `/solve`.
+- **First-run check.** On the first real loop in a fresh environment, confirm
+  the `ScheduleWakeup` actually fired the next iteration. If it does **not**
+  fire from a bare (non-`/loop`) turn, switch the `gap ≤ 3600` path to a
+  `CronCreate(recurring:false, durable:true)` one-shot at `now+gap` (cron is
+  process-level, not turn-context-dependent); record the choice in
+  `findings/decision-*.md`.
+- **Stale-schedule sweep** (on any *manual* `/solve` / `resume` / `pause` —
+  not on a fired wakeup): `CronList` → `CronDelete` any pending job whose
+  prompt starts `/solve`, so a manual run doesn't race a pending cron into a
+  double-loop. `CronList` sees only this session's store; a `durable` cron
+  from a *dead* session may fire once after a manual resume — that self-heals
+  (two `/solve` turns serialize through git; the second sees the first's
+  commits and picks the next subgoal, not a duplicate).
+
+## Minimal-context discipline (loop-control turns stay cheap)
+
+The **pause-halt turn** and the **usage-limit reschedule turn** must read
+**no** math state — no `git pull`, no `gh issue`, no `Read` of
+`proof.tex`/ROADMAP, no `lake build`, no subagents. The carried `prompt`
+already encodes everything needed to resume; the next working turn reads
+fresh. This keeps usage/scheduling mechanics out of the serious-math context.
+For the usage-limit case, issue the reschedule tool call as the **first**
+post-limit action, before any read that would re-trip the limit and burn the
+one possibly-allowed call.
 
 # Critical rules — do not violate
 
@@ -113,7 +270,8 @@ definition is a deliberate user-driven step.
     the body of the ROADMAP issue shows every task-list entry
     (`- [ ] #N` / `- [x] #N`) ticked — i.e., the meter has reached
     `N / N closed` for some `N > 0` — the target is reached and
-    `/loop /solve` must stop. Check this at **three** points:
+    the loop must stop (this is P1 of the end-of-turn scheduler,
+    § Loop control). Check this at **three** points:
 
     1. **Session start** — Resume Protocol Step 0, before any other
        resume work.
@@ -129,11 +287,12 @@ definition is a deliberate user-driven step.
 
     1. Emit a brief halt message to the user (visible in the turn's
        text output): "Target reached: ROADMAP #\<N\> shows
-       \<closed\>/\<total\> closed. Halting `/loop /solve`. To
-       continue, run `/vector add` to open a new attack vector
-       (which appends a checkbox to the ROADMAP), or invoke
-       `/solve` without `/loop` for ad-hoc maintenance."
-    2. Do **not** call `ScheduleWakeup`. The `/loop` ends here.
+       \<closed\>/\<total\> closed. Halting the loop. To continue,
+       run `/vector add` to open a new attack vector (which appends a
+       checkbox to the ROADMAP), or run `/solve once` for ad-hoc
+       maintenance."
+    2. Do **not** call `ScheduleWakeup` / `CronCreate`. The loop
+       ends here.
     3. If you are at session-start (resume protocol) and the target
        was already reached when the loop fired, do not do *any*
        work — emit the halt message and end the turn.
@@ -194,7 +353,7 @@ definition is a deliberate user-driven step.
     > all open sub-issues swept closed (verified → `verified`,
     > exhausted → `deadend`, deferred → `deprioritized`). One open
     > issue remains — the ROADMAP. No further vector advances the
-    > seeded target within scope. Halting `/loop /solve`. To continue:
+    > seeded target within scope. Halting the loop. To continue:
     > `/vector add` (new lane) or `/vector pivot` (new posture).
 
     Then skip `ScheduleWakeup`. (`N/N` halt → suggest `/polish`;
@@ -211,7 +370,7 @@ definition is a deliberate user-driven step.
       missing vector under the auto-opening rule above.
     - The user invokes `/vector add` after a halt: the new vector
       adds a checkbox to the ROADMAP, the meter moves to
-      `N / (N+1)`, and the next `/loop /solve` invocation no longer
+      `N / (N+1)`, and the next `/solve` invocation no longer
       sees the halt condition.
 
 # Novelty gate (step 0 of every subgoal)
@@ -357,12 +516,20 @@ as they become useful, not pre-defined here.
 
 # Resume protocol (run on every session start)
 
-**Step 0 — Target-reached halt check (run *first*, before anything
-else).** Read the ROADMAP issue body and count its task-list
-entries. If every entry is ticked, the target is reached and the
-loop must stop *immediately*; do not run the rest of the resume
-protocol, do not pick a new subgoal, do not schedule the next
-wake-up. Per Rule 10 in "Critical rules":
+**Step −1 — Loop control (run before Step 0).** Parse the `/solve`
+args and dispatch on mode per § Loop control → "Session-start Step −1":
+a `pause` writes the sentinel and ends the turn; a `resume` (or a
+user-issued bare `/solve` with the sentinel present) clears it; a
+fired wakeup/cron arriving while the sentinel exists is an
+authoritative halt. Only if none of those apply do you proceed to
+Step 0.
+
+**Step 0 — Target-reached halt check (run before any work).** Read
+the ROADMAP issue body and count its task-list entries. If every
+entry is ticked, the target is reached and the loop must stop
+*immediately*; do not run the rest of the resume protocol, do not
+pick a new subgoal, do not schedule the next wake-up. Per Rule 10 in
+"Critical rules":
 
 ```sh
 ROADMAP_NUM=$(gh issue list --label roadmap --json number --jq '.[0].number')
@@ -374,12 +541,12 @@ echo "ROADMAP #$ROADMAP_NUM: $CLOSED / $TOTAL closed"
 
 If `TOTAL > 0` and `CLOSED == TOTAL`, emit the halt message (text
 output only — no commit, no push, no further tool calls) and skip
-`ScheduleWakeup` at end-of-turn. The exact wording:
+the end-of-turn scheduler (no `ScheduleWakeup`/`CronCreate`). The
+exact wording:
 
 > Target reached: ROADMAP #\<N\> shows \<closed\>/\<total\> closed.
-> Halting `/loop /solve`. To continue, run `/vector add` to open a
-> new attack vector, or invoke `/solve` without `/loop` for ad-hoc
-> maintenance.
+> Halting the loop. To continue, run `/vector add` to open a new
+> attack vector, or run `/solve once` for ad-hoc maintenance.
 
 (Substitute the actual issue number and counts.) Then end the turn.
 
@@ -812,7 +979,7 @@ mathematics in full.
 # Work loop
 
 **Narration discipline (do this throughout the loop).** The user
-runs `/loop /solve` unattended and reads the live turn to know what's
+runs `/solve` unattended and reads the live turn to know what's
 happening — the recurring complaint was having to ask "what's going
 on" during long silent stretches while a subagent ran. So: **before
 every `Agent` dispatch and after every batch returns, emit one concise
@@ -842,7 +1009,11 @@ a. **Pick a subgoal** per the priority rubric above. From the open
    **not** auto-open a new vector. Auto-opening is permitted *only*
    while the ROADMAP meter is `X/N` for `X < N`, and only when the
    new vector visibly advances the originally stated target (per
-   the "Auto-opening" subsection of Rule 10).
+   the "Auto-opening" subsection of Rule 10). **Also re-check the
+   pause sentinel** (`.claude/local/solve-paused`, § Loop control):
+   if it appeared mid-run, finish the current committed work unit,
+   then exit to the session-end protocol so the end-of-turn scheduler
+   (P0) halts without rescheduling.
 
 b. **Novelty gate.** Run loogle + leansearch (and librarian if
    neither hits). If Mathlib has the result, the subgoal collapses
@@ -1078,6 +1249,14 @@ Agents inside a Workflow obey the same "no shared-file writes, no `gh`"
 rule as any sub-agent (§ Parallelism, "Unsafe"). The skeletons below are
 *adapt-me* templates — persist via the Workflow tool's `scriptPath`,
 tweak the lens/angle text per problem.
+
+**Model tier.** Leave `model` off the `agent()` opts — a custom
+`agentType` (`critic`, `librarian`, …) with no frontmatter `model:`
+inherits the session tier, so an Opus/ultracode session runs the whole
+panel/sweep on Opus. Pass `model` (or set `CLAUDE_CODE_SUBAGENT_MODEL`)
+*only* to override a built-in `agentType` that hardcodes a smaller model
+(e.g. `Explore` → Haiku); never to *downgrade* a critic panel. See
+CLAUDE.md § Subagents.
 
 ## Pattern A — adversarial critic panel (harden a high-stakes promotion)
 
@@ -1427,27 +1606,26 @@ getting full. On stop:
    scratch (that's `/target`'s job, not `/solve`'s).
 
 5. Commit: `status: session end — <one-line summary>` and push.
-6. **Re-run the halt checks** (per Resume Protocol Step 0 and Rule 10).
-   Two halt conditions:
-   - **`N/N` reached** — this session's commits just ticked the final
-     checkbox (`CLOSED == TOTAL`): output the `N/N` halt message
-     exactly as in Step 0 of the resume protocol (actual issue number
-     + `closed/total`), suggest `/polish`.
-   - **Exhausted** — the queue is empty post-sweep and no
-     scope-advancing vector can be auto-opened, even though
-     `CLOSED < TOTAL`: write `findings/decision-exhausted-<date>.md`
-     and output the **exhaustion** halt message (Rule 10, Halt
-     condition 2), suggest `/vector`.
-
-   In either case: confirm the sweep left exactly one open issue (the
-   ROADMAP), do **not** call `ScheduleWakeup`, and skip the next
-   bullet's "what's next" framing — the halt message covers it.
-7. If the target is *not* reached, output a brief end-of-session
-   report to the user (2–4 sentences): what was committed (verified
-   count / numerical count / surveys), which issues were closed,
-   what's next, then schedule the next `/loop` iteration per the
-   pacing policy in CLAUDE.md (§ "`/loop /solve` pacing"). Then stop
-   the turn.
+6. **Run the end-of-turn scheduler** (§ Loop control). It evaluates
+   P0–P5 in order and is the *single* place the loop halts or
+   reschedules:
+   - **P0–P3** (pause sentinel / target `N/N` / exhaustion /
+     iteration-count exhausted) → emit the matching halt message
+     (the `N/N` wording from Resume Step 0, suggest `/polish`; the
+     exhaustion wording from Rule 10, suggest `/vector` — writing
+     `findings/decision-exhausted-<date>.md` first; the count/pause
+     one-liners from § Loop control), confirm the sweep left exactly
+     one open issue (the ROADMAP), do **not** reschedule, end the
+     turn.
+   - **P4** (usage limit hit this turn) → reschedule per the
+     usage-limit branch (`ScheduleWakeup` if reset ≤ 1 h out, else a
+     durable one-time `CronCreate`), emit the one-line notice, end.
+   - **P5** (normal — loop continues) → output the brief
+     **end-of-session report** (2–4 sentences: what was committed —
+     verified / numerical / surveys; which issues closed; what's
+     next), append "next iteration in `<gap>`", then reschedule
+     (`ScheduleWakeup` for a ≤ 1 h gap, else durable `CronCreate`).
+     Then stop the turn.
 
 # Anti-patterns (don't do)
 

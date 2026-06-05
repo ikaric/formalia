@@ -62,15 +62,21 @@ make init
 #    Interactive; uses AskUserQuestion. (In Claude Code.)
 /target
 
-# 4. Run autonomously. Designed for unattended sessions; the harness
-#    commits and pushes per work unit, narrates each step in the live
-#    turn, and rebuilds proof.pdf on every promotion (readable early,
-#    not after hours). Halts on its own when the ROADMAP shows N/N
+# 4. Run autonomously. /solve is self-looping (no /loop wrapper): bare
+#    /solve runs sessions back-to-back; optional args tune it —
+#    `/solve every 30m` (gap between iterations), `/solve n=5` (max
+#    iterations), `/solve once` (single pass), `/solve pause` / resume.
+#    The harness commits and pushes per work unit, narrates each step in
+#    the live turn, and rebuilds proof.pdf on every promotion (readable
+#    early, not after hours). Halts on its own when the ROADMAP shows N/N
 #    closed OR the seeded lines are exhausted, sweeping all sub-issues
 #    closed so only the ROADMAP stays open (see "anti-overreach" in
 #    CLAUDE.md). A trivial T1 target may already be complete after
 #    /target alone — in that case there's nothing to run here.
-/loop /solve
+#    (The loop runs while Claude is open; for >1h gaps it uses a durable
+#    cron that survives a restart. Progress is never lost — it lives in
+#    git + Issues — so resuming is always just re-running /solve.)
+/solve
 
 # 5. (Optional, after the loop halts.) Polish the manuscript for
 #    publication — rewrite the abstract, expand the introduction,
@@ -214,7 +220,7 @@ Four slash-commands live under `.claude/skills/`. Two interactive, two autonomou
 | Skill | Mode | Purpose |
 |---|---|---|
 | **`/target`** | Interactive (`AskUserQuestion`) | One-time bootstrap. Asks for problem name + field + statement + **scope tier** (T1/T2/T3). Renames the Lake project from the `Formalia` placeholder. Seeds the manuscript, opens ROADMAP + (for T2/T3) librarian-survey issues, with the ROADMAP decomposed 1:1 to the literal asks. For a T1 target whose asks are already in Mathlib, runs the novelty gate and completes the one-shot (import wrapper → built PDF → closed ROADMAP) — no `/solve` needed. **Run once per clone.** |
-| **`/solve`** | Autonomous (no user input) | Resumes from ROADMAP + open Issues + git log. Picks the next subgoal, runs the novelty gate, dispatches sub-agents (narrating each in the live turn), runs the verify cycle, commits + pushes, rebuilds `proof.pdf` per promotion. Wrap with `/loop /solve` for sustained sessions. Halts on `N/N closed` **or** exhaustion of the seeded lines, sweeping every sub-issue closed so only the ROADMAP remains open — see CLAUDE.md § "Anti-overreach". |
+| **`/solve`** | Autonomous (no user input) | Resumes from ROADMAP + open Issues + git log. Picks the next subgoal, runs the novelty gate, dispatches sub-agents (narrating each in the live turn), runs the verify cycle, commits + pushes, rebuilds `proof.pdf` per promotion. **Self-looping** (no `/loop` wrapper): bare `/solve` runs back-to-back; args tune it — `every <dur>` (gap), `n=<int>` (max iterations), `once` (single pass), `pause`/`resume`. Halts on `N/N closed` **or** exhaustion of the seeded lines, sweeping every sub-issue closed so only the ROADMAP remains open — see CLAUDE.md § "Anti-overreach". |
 | **`/vector`** | Interactive (`AskUserQuestion`) | Three modes — `add` (seed a new vector), `retire` (close with reason → `deadend` or `deprioritized`), `pivot` (multi-retire + strategic rationale + replacements, with a `findings/pivot-DATE.md` ceremony). |
 | **`/polish`** | Autonomous (no user input) | Final-pass manuscript polish, run after the loop halts. Audits the `.tex` against publication standards (abstract written, introduction structured, every theorem has a footnote linking to its Lean file, no scaffolding leftover), adds or refines the "Formal verification" appendix with verbatim Lean snippets, runs `critic` over the polished draft, rebuilds the PDF. One commit. |
 
@@ -224,14 +230,14 @@ Four slash-commands live under `.claude/skills/`. Two interactive, two autonomou
 sequenceDiagram
     participant U as User
     participant T as /target
-    participant L as /loop /solve
+    participant L as /solve
     participant V as /vector
 
     U->>T: clone + /target
     T->>T: rename Lake project<br/>seed manuscript<br/>open ROADMAP
     T-->>U: ROADMAP URL
 
-    U->>L: /loop /solve (unattended)
+    U->>L: /solve (unattended, self-looping)
     loop verify cycle
         L->>L: novelty gate
         L->>L: librarian / domain agents

@@ -1,6 +1,6 @@
 ---
 name: target
-description: One-time bootstrap for a fresh formalia clone. Asks the user for a target problem, scaffolds the Lake project under `formal/`, seeds `manuscript/proof.tex` with the statement, writes `STATUS.md` and `findings/INDEX.md`, opens the ROADMAP issue (#1) with a seeded sub-goal checklist, and commits. Run this once per cloned repo before `/loop /solve`. This skill IS interactive — it uses AskUserQuestion. Do not call from /solve.
+description: One-time bootstrap for a fresh formalia clone. Asks the user for a target problem, scaffolds the Lake project under `formal/`, seeds `manuscript/proof.tex` with the statement, writes `STATUS.md` and `findings/INDEX.md`, opens the ROADMAP issue (#1) with a seeded sub-goal checklist, and commits. Run this once per cloned repo before `/solve`. This skill IS interactive — it uses AskUserQuestion. Do not call from /solve.
 ---
 
 You are the **target** skill for a freshly-cloned `formalia`
@@ -9,7 +9,7 @@ template harness — but no problem definition — and turn it into a
 working project pointed at a specific open mathematical problem.
 
 After this skill completes, the clone is ready for autonomous work
-via `/loop /solve`.
+via `/solve` (self-looping — no `/loop` wrapper).
 
 # Pre-flight: is this actually a fresh clone?
 
@@ -684,7 +684,7 @@ Bootstrap of a fresh formalia clone.
 - ROADMAP opened as issue #1 (tier-T<k>) with the literal-ask checklist, pinned to the repo.
 - (T2/T3) Librarian-survey scheduled as issue #2; <k> vector issues opened.
 - (T1) One issue per literal ask opened.
-Ready for /loop /solve.
+Ready for /solve.
 ```
 
 Push to `origin/main`.
@@ -739,12 +739,12 @@ output 3–4 sentences — problem display name + ROADMAP URL; "target
 reached at bootstrap — all asks were already in Mathlib (cite the
 module path[s])"; built `proof.pdf` is committed; "nothing to run —
 inspect the PDF, or `/vector add` to extend the scope." Do **not**
-tell the user to run `/loop /solve` in this case.
+tell the user to run `/solve` in this case.
 
 **Otherwise** (T2/T3, or a T1 with asks still needing proof): output
 3–4 sentences — problem display name + ROADMAP URL; number of issues
 seeded (and, for T1, how many asks the novelty gate already closed as
-import wrappers); "Run `/loop /solve` to begin work."
+import wrappers); "Run `/solve` to begin work (self-looping)."
 
 Then stop. **Do not start the open-ended work loop yourself** — the
 T1 import-wrapper one-shot above is the only work `/target` performs;
