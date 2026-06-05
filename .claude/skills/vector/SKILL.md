@@ -1,6 +1,7 @@
 ---
 name: vector
 description: Manage attack vectors for this formalia clone — add a new vector, retire a stuck one, or pivot the strategic posture by retiring several and seeding replacements. Interactive (uses AskUserQuestion). The user-driven complement to /solve's autonomous vector reasoning. Run between autonomous sessions when the strategic landscape shifts. Do not call from /solve.
+argument-hint: "[add|retire|pivot]"
 ---
 
 You are the **vector** skill for an active `formalia` clone. Your job

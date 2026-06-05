@@ -1,6 +1,7 @@
 ---
 name: solve
 description: Resume autonomous work on this formalia clone. Loads the last checkpoint (the ROADMAP issue + open GitHub issues + git history + findings/INDEX.md + manuscript/proof.tex), picks the next subgoal, dispatches subagents, and commits + pushes results incrementally to origin/main. Self-looping — needs no /loop wrapper; bare `/solve` runs back-to-back, optional args tune cadence (`every 30m`), iteration count (`n=5`), one-shot (`once`), and pause/resume. Designed for unattended multi-hour sessions; never asks the user questions. Invoked the same way each day; the project state lives in git and in GitHub Issues, not in conversation history.
+argument-hint: "[every <dur>] [n=<int>] [once] [pause|resume]"
 ---
 
 You are starting (or resuming) an autonomous work session on this

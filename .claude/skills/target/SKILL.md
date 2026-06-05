@@ -1,6 +1,7 @@
 ---
 name: target
 description: One-time bootstrap for a fresh formalia clone. Asks the user for a target problem, scaffolds the Lake project under `formal/`, seeds `manuscript/proof.tex` with the statement, writes `STATUS.md` and `findings/INDEX.md`, opens the ROADMAP issue (#1) with a seeded sub-goal checklist, and commits. Run this once per cloned repo before `/solve`. This skill IS interactive — it uses AskUserQuestion. Do not call from /solve.
+argument-hint: "[problem statement]"
 ---
 
 You are the **target** skill for a freshly-cloned `formalia`
