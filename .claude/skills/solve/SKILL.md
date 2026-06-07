@@ -110,20 +110,7 @@ and Session-end Step 6 *are* P0–P3 here, not a second copy.
 4. **P3 — iteration count exhausted** (`nextN ≤ 0` from the decrement rule)?
    Emit "Ran `<n>` of `<n>` iterations — halting; run `/solve` to start a new
    loop."; **no** reschedule; end.
-5. **P4 — usage limit hit this turn** (`rate_limit_exceeded` / `usage limit`
-   / 429 / 529)? Parse the reset time from the error; `wait = reset − now +
-   180` (≈3 min margin).
-   - `wait ≤ 3600` → `ScheduleWakeup(clamp(wait,60,3600), prompt=<carried
-     config — n NOT decremented>, reason="usage-limit reset")`.
-   - `wait > 3600` → `CronCreate` a **one-time** local run at `reset+180s`
-     (`recurring:false`, `durable:true`, same carried prompt). If that call
-     can't fire post-limit → fall back to `ScheduleWakeup(3600, …, "hourly
-     re-arm")`, which re-checks the clock each hour and arms the precise
-     wakeup once within 1 h of reset.
-   - **Do not decrement `n`** — the iteration was interrupted, not completed.
-     Emit one line ("Usage limit hit; rescheduled for `<reset+margin>`."); end.
-     (See minimal-context discipline below.)
-6. **P5 — normal reschedule** (iteration completed, loop continues): compute
+5. **P4 — normal reschedule** (iteration completed, loop continues): compute
    `nextN` (decrement rule); `nextPrompt = /solve`(+cadence)(+` n=<nextN>`).
    - `gap ≤ 3600` → `ScheduleWakeup(clamp(gap,60,3600), nextPrompt, "solve
      loop: next iteration")`.
@@ -133,24 +120,30 @@ and Session-end Step 6 *are* P0–P3 here, not a second copy.
      iteration in `<gap>`"; end.
 
 Ordering: pause beats the project halts (a user who paused wants out *now*);
-usage-limit sits below the halts (a halted loop must not re-arm) but above
-normal cadence; count above usage-limit so `once`/`n=1` never re-arm even if
-they brushed a limit.
+the count halt sits above normal cadence so `once`/`n=1` never re-arm.
+
+**Usage limits are not auto-handled.** If a session dies on a rate-limit /
+usage-cap error (`rate_limit_exceeded` / `usage limit` / 429 / 529), the loop
+simply stops — there is no usage left to schedule the next turn with, so
+attempting to is dishonest (it silently fails). The loop does **not** parse a
+reset time or re-arm itself; just re-run `/solve` once your usage resets, and
+the resume protocol picks up from the last commit (state is never lost — git +
+Issues).
 
 ## Scheduling mechanics & honest limits
 
 - **`ScheduleWakeup`** is the primary mechanism (it *is* what dynamic looping
   uses), valid for gaps ≤ 1 h. **`CronCreate`** (deferred — fetch via
-  `ToolSearch select:CronCreate`) handles gaps > 1 h and far-future
-  usage-reset resumes, as a **one-time** (`recurring:false`), **`durable:true`**
-  local job (up to ~7 days out, runs on this machine — cloud Routines are out,
-  they lack the local repo + Lean toolchain).
+  `ToolSearch select:CronCreate`) handles gaps > 1 h, as a **one-time**
+  (`recurring:false`), **`durable:true`** local job (up to ~7 days out, runs on
+  this machine — cloud Routines are out, they lack the local repo + Lean
+  toolchain).
 - **Within-session vs durable.** A bare `/solve` 60 s `ScheduleWakeup` loop
   runs **only while Claude is open** — it does *not* survive quitting Claude or
   the laptop sleeping past the timer. Only `durable:true` cron (the
-  `every >1h` / usage-reset path) survives a restart, and even that needs the
-  machine awake. State is never lost (git + Issues); "resume after a restart"
-  is always just re-running `/solve`.
+  `every >1h` path) survives a restart, and even that needs the machine awake.
+  State is never lost (git + Issues); "resume after a restart" is always just
+  re-running `/solve`.
 - **First-run check.** On the first real loop in a fresh environment, confirm
   the `ScheduleWakeup` actually fired the next iteration. If it does **not**
   fire from a bare (non-`/loop`) turn, switch the `gap ≤ 3600` path to a
@@ -167,14 +160,11 @@ they brushed a limit.
 
 ## Minimal-context discipline (loop-control turns stay cheap)
 
-The **pause-halt turn** and the **usage-limit reschedule turn** must read
-**no** math state — no `git pull`, no `gh issue`, no `Read` of
-`proof.tex`/ROADMAP, no `lake build`, no subagents. The carried `prompt`
-already encodes everything needed to resume; the next working turn reads
-fresh. This keeps usage/scheduling mechanics out of the serious-math context.
-For the usage-limit case, issue the reschedule tool call as the **first**
-post-limit action, before any read that would re-trip the limit and burn the
-one possibly-allowed call.
+The **pause-halt turn** must read **no** math state — no `git pull`, no `gh
+issue`, no `Read` of `proof.tex`/ROADMAP, no `lake build`, no subagents. The
+carried `prompt` already encodes everything needed to resume; the next working
+turn reads fresh. This keeps scheduling mechanics out of the serious-math
+context.
 
 # Critical rules — do not violate
 
@@ -1608,7 +1598,7 @@ getting full. On stop:
 
 5. Commit: `status: session end — <one-line summary>` and push.
 6. **Run the end-of-turn scheduler** (§ Loop control). It evaluates
-   P0–P5 in order and is the *single* place the loop halts or
+   P0–P4 in order and is the *single* place the loop halts or
    reschedules:
    - **P0–P3** (pause sentinel / target `N/N` / exhaustion /
      iteration-count exhausted) → emit the matching halt message
@@ -1618,15 +1608,15 @@ getting full. On stop:
      one-liners from § Loop control), confirm the sweep left exactly
      one open issue (the ROADMAP), do **not** reschedule, end the
      turn.
-   - **P4** (usage limit hit this turn) → reschedule per the
-     usage-limit branch (`ScheduleWakeup` if reset ≤ 1 h out, else a
-     durable one-time `CronCreate`), emit the one-line notice, end.
-   - **P5** (normal — loop continues) → output the brief
+   - **P4** (normal — loop continues) → output the brief
      **end-of-session report** (2–4 sentences: what was committed —
      verified / numerical / surveys; which issues closed; what's
      next), append "next iteration in `<gap>`", then reschedule
      (`ScheduleWakeup` for a ≤ 1 h gap, else durable `CronCreate`).
      Then stop the turn.
+   - **Usage limit (no priority slot)** → not handled by the
+     scheduler: the session just dies, no re-arm (§ Loop control).
+     Re-run `/solve` once usage resets.
 
 # Anti-patterns (don't do)
 

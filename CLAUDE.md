@@ -496,24 +496,21 @@ with a **60 s** gap (the harness minimum — never a longer idle delay; the user
 rejected idle pacing). Optional args: `every <dur>` (post-completion gap),
 `n=<int>` (max iterations, default unlimited), `once` (single pass),
 `pause`/`resume`. The full arg grammar and the end-of-turn **scheduler decision
-tree** (P0 pause → P1 target-reached → P2 exhaustion → P3 count → P4 usage-limit
-→ P5 normal reschedule) live in `.claude/skills/solve/SKILL.md` § "Loop
-control". Key policies:
+tree** (P0 pause → P1 target-reached → P2 exhaustion → P3 count → P4 normal
+reschedule) live in `.claude/skills/solve/SKILL.md` § "Loop control". Key
+policies:
 
 - **Reschedule mechanism.** Gaps ≤ 1 h use `ScheduleWakeup` (clamped
-  [60, 3600] s); gaps > 1 h and far-future usage-reset resumes use a one-time
-  `durable` `CronCreate` (runs locally, up to ~7 days out — cloud Routines are
-  out, no local repo). A bare 60 s loop is **within-session** (dies when Claude
-  quits); durable cron survives a restart. State is never lost (git + Issues),
-  so "resume after a restart" is just re-running `/solve`.
-- **Usage-limit case.** On a rate-limit / usage-cap error (`rate_limit_exceeded`,
-  `usage limit`, 429/529), parse the reset time and reschedule to
-  `reset + ~3 min`: `ScheduleWakeup` if ≤ 1 h out, else a durable one-time
-  `CronCreate` at the reset — so a weekly/monthly cap auto-continues without
-  hourly wake-burn. Issue the reschedule as the *first* post-limit action and
-  read **no** math state that turn (no parseable quota API exists — keep usage
-  metrics out of the math context). Don't decrement `n` (the interrupted
-  iteration didn't complete).
+  [60, 3600] s); gaps > 1 h use a one-time `durable` `CronCreate` (runs
+  locally, up to ~7 days out — cloud Routines are out, no local repo). A bare
+  60 s loop is **within-session** (dies when Claude quits); durable cron
+  survives a restart. State is never lost (git + Issues), so "resume after a
+  restart" is just re-running `/solve`.
+- **Usage limits are not auto-handled.** On a rate-limit / usage-cap error
+  (`rate_limit_exceeded`, `usage limit`, 429/529) the loop just stops — there
+  is no usage left to schedule the next turn with, so trying to is dishonest
+  (it silently fails). Re-run `/solve` once usage resets; the resume protocol
+  continues from the last commit.
 - **Halt cases (target-reached / exhaustion / count / pause).** Any of these
   stops the loop: skip the scheduler entirely (no `ScheduleWakeup`/`CronCreate`),
   the anti-overreach contract. The halt message says how to resume: `/vector
